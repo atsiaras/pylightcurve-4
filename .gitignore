@@ -1,0 +1,11 @@
+*.pyc
+*.egg-info
+*.eggs
+*.pytest_cache
+*.idea
+*.coverage*
+tests/test_eclipse
+tests/test_transit
+tests/test_emcee
+pylightcurve/*_local_*
+*.DS_Store
