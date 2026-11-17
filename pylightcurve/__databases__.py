@@ -5,7 +5,11 @@ import time
 import shutil
 from scipy.interpolate import interp1d
 
+from astropy.time import TimeDelta as astrotimedelta
+from astropy.time import Time as astrotime
+
 from .processes.files import open_dict, open_yaml, save_dict, download, open_dict_online
+from .errors import *
 
 try:
     import zipfile
@@ -53,6 +57,9 @@ class PlcData:
 
         self.databases = open_dict(self.databases_file_path)
 
+        if '.'.join(self.version.split('.')[:2]) not in self.databases:
+            raise PyLCLibraryError('Version {0} is not supported.'.format(self.version))
+
         self.exotethys_loaded = self._setup_database('exotethys')
         self.ephemerides_loaded = self._setup_database('ephemerides')
         self.photometry_loaded = self._setup_database('photometry')
@@ -64,15 +71,23 @@ class PlcData:
         self.all_filters_data = None
 
     def exotethys(self):
+        if self.exotethys_loaded is False:
+            raise PyLCLibraryError('Exotethys database is not available')
         return self.exotethys_loaded
 
     def ephemeris(self):
+        if self.ephemerides_loaded is False:
+            raise PyLCLibraryError('Ephemeris database is not available')
         return self.ephemerides_loaded
 
     def photometry(self):
+        if self.photometry_loaded is False:
+            raise PyLCLibraryError('Photometry database is not available')
         return self.photometry_loaded
 
     def catalogues(self):
+        if self.catalogues_loaded is False:
+            raise PyLCLibraryError('Catalogues database is not available')
         return self.catalogues_loaded
 
     def all_filters(self):
@@ -197,10 +212,7 @@ class PlcData:
                     new_database = open_dict(database_file_path)
                     download(new_database['zipfile'], database_directory_path + '.zip')
                     new_database = zipfile.ZipFile(database_directory_path + '.zip', 'r')
-                    here = os.path.abspath('.')
-                    os.chdir(self.databases_directory_path)
-                    new_database.extractall()
-                    os.chdir(here)
+                    new_database.extractall(path=self.databases_directory_path)
                     os.remove(database_directory_path + '.zip')
                 except:
                     pass
@@ -233,7 +245,7 @@ class PlcData:
             if dbx_file not in new_database['files']:
                 try:
                     os.remove(os.path.join(self.databases_directory_path,
-                                           new_database['files'][dbx_file]['local_path']))
+                                           current_database['files'][dbx_file]['local_path']))
                 except:
                     pass
             elif new_database['files'][dbx_file]['link'] != current_database['files'][dbx_file]['link']:
@@ -269,21 +281,24 @@ class PlcData:
         if frequency:
 
             try:
-                last_update_date = int(open(last_update_file_path).read())
+                last_update_date = open(last_update_file_path).read()
+                last_update_date = astrotime(
+                    '20{}-{}-{}'.format(last_update_date[:2], last_update_date[2:4], last_update_date[4:6]
+                                        )
+            )
             except:
-                last_update_date = 0
+                last_update_date = astrotime('2000-01-01')
 
-            today = int(time.strftime('%y%m%d'))
+            now = astrotime.now()
 
-            if today >= last_update_date + frequency:
+            if now > last_update_date + astrotimedelta('{0}d'.format(frequency)):
 
                 for dbx_file in new_database['files']:
                     if 'external_link' in new_database['files'][dbx_file]:
                         print('\tUpdating: ', dbx_file)
-                        if not download(new_database['files'][dbx_file]['external_link'],
+                        download(new_database['files'][dbx_file]['external_link'],
                                         os.path.join(self.databases_directory_path,
-                                                     new_database['files'][dbx_file]['local_path'])):
-                            final_check = False
+                                                     new_database['files'][dbx_file]['local_path']))
 
                 w = open(last_update_file_path, 'w')
                 w.write(time.strftime('%y%m%d'))

@@ -243,6 +243,25 @@ gauss_table = [np.swapaxes(gauss0, 0, 1), np.swapaxes(gauss10, 0, 1), np.swapaxe
 
 
 def gauss_numerical_integration(f, x1, x2, precision, *f_args):
+    """Integrate a function with Gauss-Legendre quadrature, over many intervals at once.
+
+    Parameters
+    ----------
+    f : callable
+        Function to integrate, called as ``f(x, *f_args)`` with a 2-D array ``x``.
+    x1, x2 : numpy.ndarray
+        Lower and upper limits of each interval.
+    precision : int
+        Number of quadrature points: 2 for 0, and 10 times ``precision`` for 1 to 6.
+    *f_args
+        Extra arguments passed to ``f``.
+
+    Returns
+    -------
+    numpy.ndarray
+        Integral of ``f`` over each interval.
+
+    """
 
     x1, x2 = (x2 - x1) / 2, (x2 + x1) / 2
 
@@ -251,6 +270,25 @@ def gauss_numerical_integration(f, x1, x2, precision, *f_args):
 
 
 def sample_function(f, precision=3):
+    """Turn a function into one that returns its integral over intervals.
+
+    Useful for fitting binned data, where each point is an integral over a bin.
+
+    Parameters
+    ----------
+    f : callable
+        Function to integrate, called as ``f(x, *args)``.
+    precision : int, optional
+        Precision of the integration (see :func:`gauss_numerical_integration`).
+        Default is 3.
+
+    Returns
+    -------
+    callable
+        A function ``g((x1, x2), *args)`` that returns the integral of ``f`` from each
+        ``x1`` to the matching ``x2``.
+
+    """
 
     def sampled_function(x12_array, *args):
 

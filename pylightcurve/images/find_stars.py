@@ -10,9 +10,38 @@ from pylightcurve.analysis.distributions import one_d_distribution
 
 def find_single_star(data_array, predicted_x, predicted_y, mean=None, std=None, burn_limit=65000, star_std=2,
                      std_limit=5.0):
+    """Find a star near a predicted position in an image.
+
+    Local maxima above the background are found within five ``star_std`` of the
+    predicted position. Starting from the closest one, a 2-D Gaussian is fitted to
+    each until one is a significant, non-saturated star.
+
+    Parameters
+    ----------
+    data_array : numpy.ndarray
+        Two-dimensional image.
+    predicted_x, predicted_y : float
+        Predicted position of the star, in pixels.
+    mean, std : float, optional
+        Mean and standard deviation of the background. Default is to estimate them
+        from a Gaussian fit to the histogram of the image.
+    burn_limit : float, optional
+        Saturation level: stars whose peak reaches it are rejected. Default is 65000.
+    star_std : int, optional
+        Expected standard deviation of the star profile, in pixels. Default is 2.
+    std_limit : float, optional
+        Minimum peak above the background, in units of ``std``. Default is 5.0.
+
+    Returns
+    -------
+    list or None
+        ``[x_mean, y_mean, norm, floor, x_sigma, y_sigma, centroid_x, centroid_y]``
+        for the star found, or ``None``.
+
+    """
     star = None
 
-    if 0 < predicted_x < len(data_array[0]) and 0 < predicted_x < len(data_array):
+    if 0 < predicted_x < len(data_array[0]) and 0 < predicted_y < len(data_array):
 
         if mean is None or std is None:
             fit_mean, fit_std = one_d_distribution(data_array, gaussian_fit=True, mad_filter=5)[2:4]

@@ -5,6 +5,29 @@ import datetime
 
 
 class Counter:
+    """Progress counter for long loops, with time estimates.
+
+    Each call to :meth:`update` advances the counter and, every ``show_every``
+    iterations, prints the progress, the elapsed time and the estimated time left on
+    a single line.
+
+    Parameters
+    ----------
+    counter : str
+        Label shown before the progress.
+    total_iterations : int
+        Total number of iterations.
+    show_every : int, optional
+        Print every this many iterations. Default is 1.
+
+    Examples
+    --------
+    >>> import pylightcurve as plc
+    >>> counter = plc.Counter('Processing', 100)
+    >>> for i in range(100):
+    ...     counter.update()
+
+    """
 
     def __init__(self, counter, total_iterations, show_every=1):
 
@@ -16,6 +39,14 @@ class Counter:
         self.show_every = int(show_every)
 
     def update(self, message=''):
+        """Advance the counter by one and print the progress if it is due.
+
+        Parameters
+        ----------
+        message : str, optional
+            Extra text shown after the progress.
+
+        """
 
         self.current_iteration += 1
         self.show += 1.0 / self.show_every

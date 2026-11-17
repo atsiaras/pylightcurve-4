@@ -102,7 +102,7 @@ def plot_mcmc_corner(fitting_object, export_file):
     traces_counts = []
 
     for i in fitting_object.names:
-        if fitting_object.results['parameters'][i]['initial']:
+        if fitting_object.results['parameters'][i]['m_error']:
             names.append(fitting_object.results['parameters'][i]['print_name'])
             results.append(fitting_object.results['parameters'][i]['value'])
             print_results.append(fitting_object.results['parameters'][i]['print_value'])
@@ -195,7 +195,7 @@ def plot_mcmc_traces(fitting_object, export_file):
         ax.axhline(fitting_object.results['parameters'][var]['value'], c='r')
         ax.axhline(fitting_object.results['parameters'][var]['value'] - fitting_object.results['parameters'][var]['m_error'],
                    ls='--', c='r', lw=0.5)
-        ax.axhline(fitting_object.results['parameters'][var]['value'] + fitting_object.results['parameters'][var]['m_error'],
+        ax.axhline(fitting_object.results['parameters'][var]['value'] + fitting_object.results['parameters'][var]['p_error'],
                    ls='--', c='r', lw=0.5)
 
         ax.set_yticks([])
@@ -213,7 +213,7 @@ def plot_mcmc_traces(fitting_object, export_file):
             ax.set_xlabel(r'$\mathrm{iteration}$', fontsize=13)
 
         ax.set_ylim(fitting_object.results['parameters'][var]['value'] - 6 * fitting_object.results['parameters'][var]['m_error'],
-                    fitting_object.results['parameters'][var]['value'] + 6 * fitting_object.results['parameters'][var]['m_error'])
+                    fitting_object.results['parameters'][var]['value'] + 6 * fitting_object.results['parameters'][var]['p_error'])
 
     fig.subplots_adjust(hspace=0, wspace=0)
     fig.savefig(export_file, transparent=False)

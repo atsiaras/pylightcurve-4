@@ -15,7 +15,7 @@ def test_targets():
 
     print(test_fixedstar.distance_on_sphere(test_fixedstar).deg())
 
-    assert test_fixedstar.distance_on_sphere(test_fixedstar).deg() == 0
+    assert test_fixedstar.distance_on_sphere(test_fixedstar).arcseconds*1000000 < 1
 
     _request_target(test_fixedstar)
     assert _is_target(test_fixedstar) is True

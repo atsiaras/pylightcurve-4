@@ -4,3 +4,4 @@ emcee>=3.0.2
 astropy>=4.2
 scipy>=1.5.2
 pyyaml
+certifi

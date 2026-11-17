@@ -5,6 +5,16 @@ import os
 from astropy.io import fits as pf
 
 
+def add_invalid_card(header):
+    # Card.fromstring does not validate, so the illegal keyword 'A?X' reaches the header;
+    # astropy refuses to write it, which sends save_fits into its repair branch
+    header.append(pf.Card.fromstring('A?X     =                    3'.ljust(80)))
+
+
+def has_invalid_card(header):
+    return any(key.upper() == 'A?X' for key in header.keys())
+
+
 def test_files():
 
     __location__ = os.path.abspath(os.path.dirname(__file__))
@@ -37,7 +47,9 @@ def test_files():
     assert plc.fits_sci_err(xx)[0][0] == 1
     assert plc.fits_sci_err(xx)[0][1] == 2
 
-    xx[1].header.set('A?χ', 3)
+    add_invalid_card(xx[1].header)
+    assert has_invalid_card(xx[1].header)
+
     plc.save_fits(xx, os.path.join(__location__, 'test.fits'))
     xx = plc.open_fits(os.path.join(__location__, 'test.fits'))
     os.remove(os.path.join(__location__, 'test.fits'))

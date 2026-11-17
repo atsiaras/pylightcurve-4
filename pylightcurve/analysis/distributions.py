@@ -9,8 +9,53 @@ from pylightcurve.analysis.gaussian import fit_gaussian, fit_two_d_gaussian
 
 def one_d_distribution(datax, step=None, abs_step=None, min_value=None, max_value=None, mad_filter=None,
                        confidence_interval=None, gaussian_fit=False):
+    """Build a histogram of a sample, and optionally its central value and uncertainties.
+
+    Parameters
+    ----------
+    datax : numpy.ndarray
+        Sample, of any shape (it is flattened).
+    step : float, optional
+        The bin width is the median absolute deviation divided by ``step`` (the
+        standard deviation if the median absolute deviation is 0). Default is 5.0.
+    abs_step : float, optional
+        Bin width, overriding ``step``.
+    min_value, max_value : float, optional
+        Range of the histogram. Values equal to the limits are excluded. Default is the
+        range of the data.
+    mad_filter : float, optional
+        Keep only values within this many median absolute deviations of the median.
+        Ignored if ``min_value`` or ``max_value`` is given.
+    confidence_interval : float, optional
+        Also return the central value and its uncertainties. The central value is the
+        centre of the most populated bin. The lower (upper) uncertainty is the
+        distance from it that contains this fraction of the values below (above) it,
+        for example 0.68 for 1 sigma.
+    gaussian_fit : bool, optional
+        Also return the centre and the standard deviation (as both uncertainties) of a
+        Gaussian fitted to the histogram. Cannot be combined with
+        ``confidence_interval``. Default is ``False``.
+
+    Returns
+    -------
+    bins : numpy.ndarray
+        Bin centres.
+    counts : numpy.ndarray
+        Number of values in each bin.
+    value, m_error, p_error : float
+        Only with ``confidence_interval`` or ``gaussian_fit``: the central value and
+        the lower and upper uncertainties.
+
+    Raises
+    ------
+    PyLCProcessError
+        If both ``confidence_interval`` and ``gaussian_fit`` are given, or if all the
+        values are identical (when the bin width is not given).
+
+    """
 
     datax = 1.0 * datax.flatten()
+    all_datax = datax
 
     if min_value is None and max_value is None:
         if mad_filter:
@@ -35,7 +80,12 @@ def one_d_distribution(datax, step=None, abs_step=None, min_value=None, max_valu
     else:
         if step is None:
             step = 5.0
-        step = np.sqrt(np.median((datax - np.median(datax)) ** 2)) / step
+        spread = np.sqrt(np.median((datax - np.median(datax)) ** 2))
+        if not spread > 0:
+            spread = np.std(all_datax)
+        if not spread > 0:
+            raise PyLCProcessError('All values are identical, a distribution cannot be computed.')
+        step = spread / step
 
     bins_number = int((max_value - min_value) / step) + 1
     bins = np.array(min_value + step / 2. + np.arange(bins_number) * step)
@@ -59,8 +109,10 @@ def one_d_distribution(datax, step=None, abs_step=None, min_value=None, max_valu
         centroid = np.argmax(distr)
         exp_val = distrx[centroid]
 
-        total_probability_left = np.sum(bin_width * distr[:centroid]) * confidence_interval
-        total_probability_right = np.sum(bin_width * distr[centroid:]) * confidence_interval
+        total_probability_left = (np.sum(bin_width * distr[:centroid])
+                                  + bin_width * distr[centroid] / 2.0) * confidence_interval
+        total_probability_right = (np.sum(bin_width * distr[centroid + 1:])
+                                   + bin_width * distr[centroid] / 2.0) * confidence_interval
 
         num = centroid
         leftci = 0
@@ -109,9 +161,53 @@ def one_d_distribution(datax, step=None, abs_step=None, min_value=None, max_valu
 def two_d_distribution(datax, datay, step=None, abs_step_x=None, abs_step_y=None, min_value_x=None, min_value_y=None,
                        max_value_x=None, max_value_y=None, mad_filter=None, confidence_interval=None,
                        gaussian_fit=False):
+    """Build a two-dimensional histogram of two samples.
+
+    Parameters
+    ----------
+    datax, datay : numpy.ndarray
+        The two samples, of equal size (they are flattened).
+    step : float, optional
+        Each bin width is the median absolute deviation of the sample divided by
+        ``step`` (the standard deviation if the median absolute deviation is 0).
+        Default is 5.0.
+    abs_step_x, abs_step_y : float, optional
+        Bin widths, overriding ``step``.
+    min_value_x, min_value_y, max_value_x, max_value_y : float, optional
+        Range of the histogram. Default is the range of the data.
+    mad_filter : float, optional
+        Keep only pairs within this many median absolute deviations of the median, in
+        both samples.
+    confidence_interval : float, optional
+        Also return the central values and uncertainties of each sample, as in
+        :func:`one_d_distribution`.
+    gaussian_fit : bool, optional
+        Also return the centre and standard deviations of a two-dimensional Gaussian
+        fitted to the histogram. Cannot be combined with ``confidence_interval``.
+        Default is ``False``.
+
+    Returns
+    -------
+    bins_x, bins_y : numpy.ndarray
+        Grids of the bin centres.
+    counts : numpy.ndarray
+        Number of pairs in each bin, with shape ``(len(y bins), len(x bins))``.
+    value_x, m_error_x, p_error_x, value_y, m_error_y, p_error_y : float
+        Only with ``confidence_interval`` or ``gaussian_fit``: the central value and
+        the lower and upper uncertainties of each sample.
+
+    Raises
+    ------
+    PyLCProcessError
+        If both ``confidence_interval`` and ``gaussian_fit`` are given, or if all the
+        values are identical (when the bin width is not given).
+
+    """
 
     datax = datax.flatten()
+    all_datax = datax
     datay = datay.flatten()
+    all_datay = datay
 
     if min_value_x is None and max_value_x is None:
         if mad_filter:
@@ -156,7 +252,12 @@ def two_d_distribution(datax, datay, step=None, abs_step_x=None, abs_step_y=None
             step_x = 5.0
         else:
             step_x = step
-        step_x = np.sqrt(np.median((datax - np.median(datax)) ** 2)) / step_x
+        spread_x = np.sqrt(np.median((datax - np.median(datax)) ** 2))
+        if not spread_x > 0:
+            spread_x = np.std(all_datax)
+        if not spread_x > 0:
+            raise PyLCProcessError('All x values are identical, a distribution cannot be computed.')
+        step_x = spread_x / step_x
 
     bins_number_x = int((max_value_x - min_value_x) / step_x) + 1
     bins_x = np.array(min_value_x + step_x / 2. + np.arange(bins_number_x) * step_x)
@@ -168,7 +269,13 @@ def two_d_distribution(datax, datay, step=None, abs_step_x=None, abs_step_y=None
             step_y = 5.0
         else:
             step_y = step
-        step_y = np.sqrt(np.median((datay - np.median(datay)) ** 2)) / step_y
+
+        spread_y = np.sqrt(np.median((datay - np.median(datay)) ** 2))
+        if not spread_y > 0:
+            spread_y = np.std(all_datay)
+        if not spread_y > 0:
+            raise PyLCProcessError('All y values are identical, a distribution cannot be computed.')
+        step_y = spread_y / step_y
 
     bins_number_y = int((max_value_y - min_value_y) / step_y) + 1
     bins_y = np.array(min_value_y + step_y / 2. + np.arange(bins_number_y) * step_y)

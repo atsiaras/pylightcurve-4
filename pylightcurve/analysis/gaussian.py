@@ -12,12 +12,64 @@ from pylightcurve.analysis.numerical_integration import sample_function
 
 
 def gaussian(x_array, model_norm, model_floor, model_mean, model_std):
+    """Evaluate a one-dimensional Gaussian on a constant floor.
+
+    Parameters
+    ----------
+    x_array : numpy.ndarray
+        Points at which to evaluate the function.
+    model_norm : float
+        Amplitude.
+    model_floor : float
+        Constant background.
+    model_mean : float
+        Centre.
+    model_std : float
+        Standard deviation.
+
+    Returns
+    -------
+    numpy.ndarray
+        ``model_floor + model_norm * exp(-0.5 * (x - model_mean)**2 / model_std**2)``.
+
+    """
 
     return model_floor + (model_norm *
                           np.exp(- 0.5 * (model_mean - x_array) * (model_mean - x_array) / (model_std * model_std)))
 
 
 def fit_gaussian(datax, datay, positive=False, sampled=False, sampled_precision=3, maxfev=10000):
+    """Fit a one-dimensional Gaussian on a constant floor.
+
+    The initial values are estimated from the data: the floor from the median, the
+    amplitude and the centre from the maximum, and the standard deviation from the
+    half maximum.
+
+    Parameters
+    ----------
+    datax, datay : array_like
+        Data to fit.
+    positive : bool, optional
+        Force a positive amplitude (and return the absolute value of the floor).
+        Default is ``False``.
+    sampled : bool, optional
+        Treat each point as the integral of the Gaussian over its bin (bin edges
+        halfway between the points) rather than its value at the point. Use for
+        histograms. Default is ``False``.
+    sampled_precision : int, optional
+        Precision of the bin integration (see :func:`gauss_numerical_integration`).
+        Default is 3.
+    maxfev : int, optional
+        Maximum number of function evaluations. Default is 10000.
+
+    Returns
+    -------
+    popt : numpy.ndarray
+        Best-fit ``[norm, floor, mean, std]``, as in :func:`gaussian`.
+    pcov : numpy.ndarray
+        Covariance matrix of ``popt``.
+
+    """
 
     # TODO option to restrict the space searched
 
@@ -61,6 +113,29 @@ def fit_gaussian(datax, datay, positive=False, sampled=False, sampled_precision=
 
 def two_d_gaussian(x_array, y_array, model_norm, model_floor, model_x_mean, model_y_mean, model_x_sigma, model_y_sigma,
                    model_theta):
+    """Evaluate a two-dimensional, rotated Gaussian on a constant floor.
+
+    Parameters
+    ----------
+    x_array, y_array : numpy.ndarray
+        Coordinates at which to evaluate the function.
+    model_norm : float
+        Amplitude.
+    model_floor : float
+        Constant background.
+    model_x_mean, model_y_mean : float
+        Centre.
+    model_x_sigma, model_y_sigma : float
+        Standard deviations along the two axes of the Gaussian.
+    model_theta : float
+        Rotation angle of the axes, in radians.
+
+    Returns
+    -------
+    numpy.ndarray
+        Function values.
+
+    """
 
     a = (np.cos(model_theta) ** 2) / (2 * model_x_sigma ** 2) + (np.sin(model_theta) ** 2) / (2 * model_y_sigma ** 2)
     b = -(np.sin(2 * model_theta)) / (4 * model_x_sigma ** 2) + (np.sin(2 * model_theta)) / (4 * model_y_sigma ** 2)
@@ -73,6 +148,36 @@ def two_d_gaussian(x_array, y_array, model_norm, model_floor, model_x_mean, mode
 
 def fit_two_d_gaussian(datax, datay, dataz, positive=False, symmetric=False, point_xy=None, sigma=None,
                        maxfev=10000):
+    """Fit a two-dimensional Gaussian to an image.
+
+    Parameters
+    ----------
+    datax, datay : numpy.ndarray
+        Coordinate grids of the image, as from :func:`numpy.meshgrid`.
+    dataz : numpy.ndarray
+        Image values, with the same shape as ``datax``.
+    positive : bool, optional
+        Force a positive amplitude (and return the absolute value of the floor).
+        Default is ``False``.
+    symmetric : bool, optional
+        Fit a circular Gaussian (one sigma, no rotation). Default is ``False``.
+    point_xy : tuple of float, optional
+        Initial centre ``(x, y)``, rounded down to integers. Default is to estimate it
+        from the data.
+    sigma : float, optional
+        Initial standard deviation. Default is to estimate it from the data.
+    maxfev : int, optional
+        Maximum number of function evaluations. Default is 10000.
+
+    Returns
+    -------
+    popt : numpy.ndarray
+        Best-fit ``[norm, floor, x_mean, y_mean, x_sigma, y_sigma, theta]``, or
+        ``[norm, floor, x_mean, y_mean, sigma]`` if ``symmetric``.
+    pcov : numpy.ndarray
+        Covariance matrix of ``popt``.
+
+    """
 
     datax = np.array(datax, dtype=float)
     datay = np.array(datay, dtype=float)

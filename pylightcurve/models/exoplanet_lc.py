@@ -19,6 +19,50 @@ from pylightcurve.processes.files import open_dict
 
 
 def planet_orbit(period, sma_over_rs, eccentricity, inclination, periastron, mid_time, time_array, ww=0):
+    """Calculate the position of the planet on its orbit.
+
+    The position is given in a Cartesian frame centred on the star, in units of the
+    stellar radius. The observer is at (+infinity, 0, 0). For ``periastron = 90``
+    the planet is at periastron at mid-transit.
+
+    Parameters
+    ----------
+    period : float
+        Orbital period, in days.
+    sma_over_rs : float
+        Orbital semi-major axis in units of the stellar radius, a/R*.
+    eccentricity : float
+        Orbital eccentricity.
+    inclination : float
+        Orbital inclination, in degrees.
+    periastron : float
+        Argument of periastron, in degrees.
+    mid_time : float
+        Transit mid-time (conjunction with the planet in front of the star), in
+        BJD_TDB.
+    time_array : numpy.ndarray
+        Times at which to evaluate the model, in BJD_TDB.
+    ww : float, optional
+        Longitude of the ascending node, in degrees. Default is 0. It does not affect
+        transit or eclipse light curves.
+
+    Returns
+    -------
+    list of numpy.ndarray
+        ``[x, y, z]``, the position of the planet at each time, in units of the stellar
+        radius. ``x > 0`` means the planet is between the star and the observer.
+
+    Raises
+    ------
+    RuntimeError
+        If Kepler's equation does not converge within 10000 iterations (eccentric orbits
+        only).
+
+    See Also
+    --------
+    pylightcurve.Planet.planet_orbit
+
+    """
 
     inclination = inclination * np.pi / 180.0
     periastron = periastron * np.pi / 180.0
@@ -64,6 +108,34 @@ def planet_orbit(period, sma_over_rs, eccentricity, inclination, periastron, mid
 
 
 def planet_star_projected_distance(period, sma_over_rs, eccentricity, inclination, periastron, mid_time, time_array):
+    """Calculate the planet-star distance projected on the sky.
+
+    Parameters
+    ----------
+    period : float
+        Orbital period, in days.
+    sma_over_rs : float
+        Orbital semi-major axis in units of the stellar radius, a/R*.
+    eccentricity : float
+        Orbital eccentricity.
+    inclination : float
+        Orbital inclination, in degrees.
+    periastron : float
+        Argument of periastron, in degrees.
+    mid_time : float
+        Transit mid-time (conjunction with the planet in front of the star), in
+        BJD_TDB.
+    time_array : numpy.ndarray
+        Times at which to evaluate the model, in BJD_TDB.
+
+    Returns
+    -------
+    numpy.ndarray
+        Projected distance at each time, in units of the stellar radius, sqrt(y^2 + z^2)
+        in the frame of :func:`planet_orbit`. It is the same in front of and behind the
+        star.
+
+    """
 
     position_vector = planet_orbit(period, sma_over_rs, eccentricity, inclination, periastron, mid_time, time_array)
 
@@ -71,6 +143,25 @@ def planet_star_projected_distance(period, sma_over_rs, eccentricity, inclinatio
 
 
 def planet_phase(period, mid_time, time_array):
+    """Calculate the orbital phase of the planet.
+
+    Parameters
+    ----------
+    period : float
+        Orbital period, in days.
+    mid_time : float
+        Transit mid-time (conjunction with the planet in front of the star), in
+        BJD_TDB.
+    time_array : numpy.ndarray
+        Times at which to evaluate the model, in BJD_TDB.
+
+    Returns
+    -------
+    numpy.ndarray
+        ``(time_array - mid_time) / period``. The phase is 0 at mid-transit and is not
+        wrapped, so its integer part is the number of orbits since ``mid_time``.
+
+    """
     return (time_array - mid_time)/period
 
 
@@ -310,6 +401,68 @@ def transit_flux_drop(limb_darkening_coefficients, rp_over_rs, z_over_rs, method
 
 def transit(limb_darkening_coefficients, rp_over_rs, period, sma_over_rs, eccentricity, inclination, periastron,
             mid_time, time_array, method='claret', precision=3):
+    """Calculate a transit light curve.
+
+    The flux is evaluated at each time, without integrating over the exposure. For
+    observed data with finite exposure times, use :func:`transit_integrated`.
+
+    Parameters
+    ----------
+    limb_darkening_coefficients : array_like
+        Four limb-darkening coefficients. Laws with fewer coefficients use the first
+        one or two and ignore the rest (they are usually set to zero).
+    rp_over_rs : float
+        Planet-to-star radius ratio, Rp/R*.
+    period : float
+        Orbital period, in days.
+    sma_over_rs : float
+        Orbital semi-major axis in units of the stellar radius, a/R*.
+    eccentricity : float
+        Orbital eccentricity.
+    inclination : float
+        Orbital inclination, in degrees.
+    periastron : float
+        Argument of periastron, in degrees.
+    mid_time : float
+        Transit mid-time (conjunction with the planet in front of the star), in
+        BJD_TDB.
+    time_array : numpy.ndarray
+        Times at which to evaluate the model, in BJD_TDB.
+    method : {'claret', 'quad', 'sqrt', 'linear', 'zero'}, optional
+        Limb-darkening law. Default is ``'claret'``. See the Notes.
+    precision : int, optional
+        Precision of the numerical integration, from 0 to 6 (2 Gauss-Legendre
+        points for 0, and 10 times ``precision`` points otherwise). Default is 3.
+
+    Returns
+    -------
+    numpy.ndarray
+        Relative flux of the star, equal to 1 outside the transit.
+
+    See Also
+    --------
+    transit_integrated, pylightcurve.Planet.transit
+
+    Notes
+    -----
+    The limb-darkening laws, with mu the cosine of the angle between the line of sight
+    and the normal to the stellar surface, are:
+
+    - ``'claret'``: I(mu) = 1 - a1 (1 - mu^1/2) - a2 (1 - mu) - a3 (1 - mu^3/2) - a4 (1 - mu^2)
+    - ``'quad'``: I(mu) = 1 - a1 (1 - mu) - a2 (1 - mu)^2
+    - ``'sqrt'``: I(mu) = 1 - a1 (1 - mu) - a2 (1 - mu^1/2)
+    - ``'linear'``: I(mu) = 1 - a1 (1 - mu)
+    - ``'zero'``: no limb darkening (uniform disk).
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pylightcurve as plc
+    >>> time_array = np.linspace(2452826.52928, 2452826.72928, 200)
+    >>> flux = plc.transit([0.6, -0.4, 1.0, -0.4], 0.12086, 3.5247486, 8.76, 0.0, 86.71,
+    ...                    0.0, 2452826.62928, time_array)
+
+    """
 
     position_vector = planet_orbit(period, sma_over_rs, eccentricity, inclination, periastron, mid_time, time_array)
 
@@ -323,6 +476,57 @@ def transit(limb_darkening_coefficients, rp_over_rs, period, sma_over_rs, eccent
 
 def transit_integrated(limb_darkening_coefficients, rp_over_rs, period, sma_over_rs, eccentricity, inclination,
                        periastron, mid_time, time_array, exp_time, max_sub_exp_time=10, method='claret', precision=3):
+    """Calculate a transit light curve integrated over the exposure time.
+
+    Each exposure is split into equal sub-exposures no longer than
+    ``max_sub_exp_time``. The flux is calculated at the middle of each sub-exposure and
+    averaged.
+
+    Parameters
+    ----------
+    limb_darkening_coefficients : array_like
+        Four limb-darkening coefficients. Laws with fewer coefficients use the first
+        one or two and ignore the rest (they are usually set to zero).
+    rp_over_rs : float
+        Planet-to-star radius ratio, Rp/R*.
+    period : float
+        Orbital period, in days.
+    sma_over_rs : float
+        Orbital semi-major axis in units of the stellar radius, a/R*.
+    eccentricity : float
+        Orbital eccentricity.
+    inclination : float
+        Orbital inclination, in degrees.
+    periastron : float
+        Argument of periastron, in degrees.
+    mid_time : float
+        Transit mid-time (conjunction with the planet in front of the star), in
+        BJD_TDB.
+    time_array : numpy.ndarray
+        Times at which to evaluate the model, in BJD_TDB.
+    exp_time : float
+        Exposure time, in seconds. Each value of ``time_array`` is the mid-exposure
+        time.
+    max_sub_exp_time : float, optional
+        Maximum duration of the sub-exposures used for the integration, in seconds.
+        Default is 10.
+    method : {'claret', 'quad', 'sqrt', 'linear', 'zero'}, optional
+        Limb-darkening law. Default is ``'claret'``. See the Notes.
+    precision : int, optional
+        Precision of the numerical integration, from 0 to 6 (2 Gauss-Legendre
+        points for 0, and 10 times ``precision`` points otherwise). Default is 3.
+
+    Returns
+    -------
+    numpy.ndarray
+        Relative flux of the star averaged over each exposure, equal to 1 outside the
+        transit.
+
+    See Also
+    --------
+    transit, pylightcurve.Planet.transit_integrated
+
+    """
 
     time_factor = int(exp_time / max_sub_exp_time) + 1
     exp_time /= (60.0 * 60.0 * 24.0)
@@ -344,6 +548,32 @@ def transit_integrated(limb_darkening_coefficients, rp_over_rs, period, sma_over
 
 
 def transit_duration(rp_over_rs, period, sma_over_rs, eccentricity, inclination, periastron):
+    """Calculate the total transit duration, T14.
+
+    T14 is the time between the first and the fourth contact, when the projected
+    planet-star distance equals 1 + Rp/R*. It is found numerically from the orbit.
+
+    Parameters
+    ----------
+    rp_over_rs : float
+        Planet-to-star radius ratio, Rp/R*.
+    period : float
+        Orbital period, in days.
+    sma_over_rs : float
+        Orbital semi-major axis in units of the stellar radius, a/R*.
+    eccentricity : float
+        Orbital eccentricity.
+    inclination : float
+        Orbital inclination, in degrees.
+    periastron : float
+        Argument of periastron, in degrees.
+
+    Returns
+    -------
+    float
+        Transit duration, in days.
+
+    """
 
     ww = periastron * np.pi / 180
     ii = inclination * np.pi / 180
@@ -369,6 +599,39 @@ def transit_duration(rp_over_rs, period, sma_over_rs, eccentricity, inclination,
 
 def transit_depth(limb_darkening_coefficients, rp_over_rs, period, sma_over_rs, eccentricity, inclination,
                   periastron, method='claret', precision=6):
+    """Calculate the transit depth at mid-transit.
+
+    The depth includes limb darkening, so it is generally not equal to (Rp/R*)^2.
+
+    Parameters
+    ----------
+    limb_darkening_coefficients : array_like
+        Four limb-darkening coefficients. Laws with fewer coefficients use the first
+        one or two and ignore the rest (they are usually set to zero).
+    rp_over_rs : float
+        Planet-to-star radius ratio, Rp/R*.
+    period : float
+        Orbital period, in days.
+    sma_over_rs : float
+        Orbital semi-major axis in units of the stellar radius, a/R*.
+    eccentricity : float
+        Orbital eccentricity.
+    inclination : float
+        Orbital inclination, in degrees.
+    periastron : float
+        Argument of periastron, in degrees.
+    method : {'claret', 'quad', 'sqrt', 'linear', 'zero'}, optional
+        Limb-darkening law. Default is ``'claret'``. See the Notes.
+    precision : int, optional
+        Precision of the numerical integration, from 0 to 6 (2 Gauss-Legendre
+        points for 0, and 10 times ``precision`` points otherwise). Default is 6.
+
+    Returns
+    -------
+    float
+        Transit depth, as 1 minus the relative flux at mid-transit.
+
+    """
 
     return 1 - transit(limb_darkening_coefficients, rp_over_rs, period, sma_over_rs, eccentricity, inclination,
                        periastron, 10000, np.array([10000]), method=method, precision=precision)[0]
@@ -378,6 +641,48 @@ def transit_depth(limb_darkening_coefficients, rp_over_rs, period, sma_over_rs, 
 
 def eclipse(fp_over_fs, rp_over_rs, period, sma_over_rs, eccentricity, inclination, periastron, mid_time,
             time_array, precision=3):
+    """Calculate a secondary eclipse light curve.
+
+    The flux is evaluated at each time, without integrating over the exposure. For
+    observed data with finite exposure times, use :func:`eclipse_integrated`. The planet
+    is treated as a uniform disk.
+
+    Parameters
+    ----------
+    fp_over_fs : float
+        Planet-to-star flux ratio, Fp/F*, in the observed band.
+    rp_over_rs : float
+        Planet-to-star radius ratio, Rp/R*.
+    period : float
+        Orbital period, in days.
+    sma_over_rs : float
+        Orbital semi-major axis in units of the stellar radius, a/R*.
+    eccentricity : float
+        Orbital eccentricity.
+    inclination : float
+        Orbital inclination, in degrees.
+    periastron : float
+        Argument of periastron, in degrees.
+    mid_time : float
+        Eclipse mid-time (conjunction with the planet behind the star), in BJD_TDB.
+        See :func:`eclipse_mid_time`.
+    time_array : numpy.ndarray
+        Times at which to evaluate the model, in BJD_TDB.
+    precision : int, optional
+        Precision of the numerical integration, from 0 to 6 (2 Gauss-Legendre
+        points for 0, and 10 times ``precision`` points otherwise). Default is 3.
+
+    Returns
+    -------
+    numpy.ndarray
+        Relative flux of the system, equal to 1 outside the eclipse and to
+        1 / (1 + Fp/F*) during a full eclipse.
+
+    See Also
+    --------
+    eclipse_integrated, pylightcurve.Planet.eclipse
+
+    """
 
     position_vector = planet_orbit(period, sma_over_rs / rp_over_rs, eccentricity, inclination, periastron + 180,
                                    mid_time, time_array)
@@ -392,6 +697,54 @@ def eclipse(fp_over_fs, rp_over_rs, period, sma_over_rs, eccentricity, inclinati
 
 def eclipse_integrated(fp_over_fs, rp_over_rs, period, sma_over_rs, eccentricity, inclination, periastron,
                        mid_time, time_array, exp_time, max_sub_exp_time=10, precision=3):
+    """Calculate a secondary eclipse light curve integrated over the exposure time.
+
+    Each exposure is split into equal sub-exposures no longer than
+    ``max_sub_exp_time``. The flux is calculated at the middle of each sub-exposure and
+    averaged. The planet is treated as a uniform disk.
+
+    Parameters
+    ----------
+    fp_over_fs : float
+        Planet-to-star flux ratio, Fp/F*, in the observed band.
+    rp_over_rs : float
+        Planet-to-star radius ratio, Rp/R*.
+    period : float
+        Orbital period, in days.
+    sma_over_rs : float
+        Orbital semi-major axis in units of the stellar radius, a/R*.
+    eccentricity : float
+        Orbital eccentricity.
+    inclination : float
+        Orbital inclination, in degrees.
+    periastron : float
+        Argument of periastron, in degrees.
+    mid_time : float
+        Eclipse mid-time (conjunction with the planet behind the star), in BJD_TDB.
+        See :func:`eclipse_mid_time`.
+    time_array : numpy.ndarray
+        Times at which to evaluate the model, in BJD_TDB.
+    exp_time : float
+        Exposure time, in seconds. Each value of ``time_array`` is the mid-exposure
+        time.
+    max_sub_exp_time : float, optional
+        Maximum duration of the sub-exposures used for the integration, in seconds.
+        Default is 10.
+    precision : int, optional
+        Precision of the numerical integration, from 0 to 6 (2 Gauss-Legendre
+        points for 0, and 10 times ``precision`` points otherwise). Default is 3.
+
+    Returns
+    -------
+    numpy.ndarray
+        Relative flux of the system averaged over each exposure, equal to 1 outside
+        the eclipse.
+
+    See Also
+    --------
+    eclipse, pylightcurve.Planet.eclipse_integrated
+
+    """
 
     time_factor = int(exp_time / max_sub_exp_time) + 1
     exp_time /= (60.0 * 60.0 * 24.0)
@@ -403,7 +756,7 @@ def eclipse_integrated(fp_over_fs, rp_over_rs, period, sma_over_rs, eccentricity
                                    mid_time, time_array_hr)
 
     projected_distance = np.where(
-        position_vector[0] < 0, 1.0 + 5.0 * rp_over_rs,
+        position_vector[0] < 0, 1.0 + 5.0 / rp_over_rs,
         np.sqrt(position_vector[1] * position_vector[1] + position_vector[2] * position_vector[2]))
 
     return np.mean(np.reshape(
@@ -413,6 +766,33 @@ def eclipse_integrated(fp_over_fs, rp_over_rs, period, sma_over_rs, eccentricity
 
 
 def eclipse_mid_time(period, sma_over_rs, eccentricity, inclination, periastron, mid_time):
+    """Calculate the eclipse mid-time that follows a given transit.
+
+    For eccentric orbits the eclipse is not at phase 0.5, so its time is found
+    numerically from the orbit.
+
+    Parameters
+    ----------
+    period : float
+        Orbital period, in days.
+    sma_over_rs : float
+        Orbital semi-major axis in units of the stellar radius, a/R*.
+    eccentricity : float
+        Orbital eccentricity.
+    inclination : float
+        Orbital inclination, in degrees.
+    periastron : float
+        Argument of periastron, in degrees.
+    mid_time : float
+        Transit mid-time (conjunction with the planet in front of the star), in
+        BJD_TDB.
+
+    Returns
+    -------
+    float
+        Eclipse mid-time (conjunction with the planet behind the star), in BJD_TDB.
+
+    """
     test_array = np.arange(0, period, 0.001)
     xx, yy, zz = planet_orbit(period, sma_over_rs, eccentricity, inclination, periastron, mid_time,
                               test_array + mid_time)
@@ -434,6 +814,33 @@ def eclipse_mid_time(period, sma_over_rs, eccentricity, inclination, periastron,
 
 
 def eclipse_duration(rp_over_rs, period, sma_over_rs, eccentricity, inclination, periastron):
+    """Calculate the total eclipse duration.
+
+    The duration is the time between the first and the fourth contact of the eclipse,
+    when the projected planet-star distance equals 1 + Rp/R*. It is found numerically
+    from the orbit.
+
+    Parameters
+    ----------
+    rp_over_rs : float
+        Planet-to-star radius ratio, Rp/R*.
+    period : float
+        Orbital period, in days.
+    sma_over_rs : float
+        Orbital semi-major axis in units of the stellar radius, a/R*.
+    eccentricity : float
+        Orbital eccentricity.
+    inclination : float
+        Orbital inclination, in degrees.
+    periastron : float
+        Argument of periastron, in degrees.
+
+    Returns
+    -------
+    float
+        Eclipse duration, in days.
+
+    """
 
     ww = periastron * np.pi / 180
     ii = inclination * np.pi / 180
@@ -461,6 +868,35 @@ def eclipse_duration(rp_over_rs, period, sma_over_rs, eccentricity, inclination,
 
 
 def eclipse_depth(fp_over_fs, rp_over_rs, period, sma_over_rs, eccentricity, inclination, periastron, precision=6):
+    """Calculate the eclipse depth at mid-eclipse.
+
+    Parameters
+    ----------
+    fp_over_fs : float
+        Planet-to-star flux ratio, Fp/F*, in the observed band.
+    rp_over_rs : float
+        Planet-to-star radius ratio, Rp/R*.
+    period : float
+        Orbital period, in days.
+    sma_over_rs : float
+        Orbital semi-major axis in units of the stellar radius, a/R*.
+    eccentricity : float
+        Orbital eccentricity.
+    inclination : float
+        Orbital inclination, in degrees.
+    periastron : float
+        Argument of periastron, in degrees.
+    precision : int, optional
+        Precision of the numerical integration, from 0 to 6 (2 Gauss-Legendre
+        points for 0, and 10 times ``precision`` points otherwise). Default is 6.
+
+    Returns
+    -------
+    float
+        Eclipse depth, as 1 minus the relative flux at mid-eclipse. For a full eclipse
+        it equals Fp/F* / (1 + Fp/F*).
+
+    """
 
     return 1 - eclipse(fp_over_fs, rp_over_rs, period, sma_over_rs, eccentricity, inclination,
                        periastron, 10000, np.array([10000]), precision=precision)[0]
@@ -474,6 +910,40 @@ def _get_filter(photometric_filter):
 
 
 def fp_over_fs(rp_over_rs, sma_over_rs, albedo, emissivity, stellar_temperature, filter_name):
+    """Estimate the planet-to-star flux ratio in a filter.
+
+    The flux ratio is the sum of the reflected light, albedo * (Rp/a)^2, and the
+    thermal emission of the planet. The emission is (Rp/R*)^2 times the ratio of two
+    black bodies, averaged over the filter passband. The planet temperature is::
+
+        T_p = T_* * sqrt(0.5 / (a/R*)) * ((1 - albedo) / emissivity) ** 0.25
+
+    Parameters
+    ----------
+    rp_over_rs : float
+        Planet-to-star radius ratio, Rp/R*.
+    sma_over_rs : float
+        Orbital semi-major axis in units of the stellar radius, a/R*.
+    albedo : float
+        Planet albedo.
+    emissivity : float
+        Planet emissivity.
+    stellar_temperature : float
+        Effective temperature of the host star, in Kelvin.
+    filter_name : str
+        Name of the filter. See :doc:`/user_guide/filters` for the available filters.
+
+    Returns
+    -------
+    float
+        Planet-to-star flux ratio, Fp/F*.
+
+    Raises
+    ------
+    PyLCInputError
+        If the filter is not available.
+
+    """
 
     _get_filter(filter_name)
 
@@ -508,6 +978,52 @@ def fp_over_fs(rp_over_rs, sma_over_rs, albedo, emissivity, stellar_temperature,
 
 def exotethys(stellar_logg, stellar_temperature, stellar_metallicity, filter_name, method='claret',
               stellar_model='phoenix'):
+    """Calculate limb-darkening coefficients for a star and a filter.
+
+    The coefficients are interpolated (trilinearly in log(g), Teff and metallicity)
+    from grids pre-computed with
+    `ExoTETHyS <https://github.com/ucl-exoplanets/ExoTETHyS>`_
+    (`Morello et al. 2020 <https://iopscience.iop.org/article/10.3847/1538-3881/ab63dc>`_).
+    The grids are downloaded the first time PyLightcurve is imported.
+
+    Parameters
+    ----------
+    stellar_logg : float
+        Surface gravity of the host star, log(g) in cm/s^2.
+    stellar_temperature : float
+        Effective temperature of the host star, in Kelvin.
+    stellar_metallicity : float
+        Metallicity of the host star, in dex.
+    filter_name : str
+        Name of the filter. See :doc:`/user_guide/filters` for the available filters.
+    method : {'claret', 'quad', 'sqrt', 'linear'}, optional
+        Limb-darkening law. Default is ``'claret'``. See :func:`transit` for the laws.
+    stellar_model : {'phoenix', 'atlas'}, optional
+        Stellar model grid. Default is ``'phoenix'``.
+
+    Returns
+    -------
+    numpy.ndarray
+        Four limb-darkening coefficients. Laws with fewer coefficients are padded with
+        zeros.
+
+    Raises
+    ------
+    PyLCInputError
+        If ``method``, ``stellar_model`` or ``filter_name`` is not available.
+    PyLCProcessError
+        If the stellar parameters are outside the grid.
+
+    Notes
+    -----
+    The inputs are changed automatically, with a printed message, in two cases:
+
+    - For the Spitzer filters (``'irac1'`` to ``'irac4'``) only the ATLAS grid is
+      available, so ``'phoenix'`` is replaced by ``'atlas'``. ATLAS starts at 3500 K.
+    - The PHOENIX grid only covers solar metallicity, so with ``'phoenix'`` a non-zero
+      ``stellar_metallicity`` is set to 0.
+
+    """
 
     available_methods = ['claret', 'sqrt', 'quad', 'linear']
 
@@ -534,15 +1050,12 @@ def exotethys(stellar_logg, stellar_temperature, stellar_metallicity, filter_nam
 
     stellar_model = stellar_model.lower()
 
+    if stellar_model == 'phoenix' and filter_name in ['irac1', 'irac2', 'irac3', 'irac4']:
+        print('PHOENIX models are not available for this filter. Setting stellar_model = atlas')
+        stellar_model = 'atlas'
     if stellar_model == 'phoenix' and stellar_metallicity != 0:
         print('PHOENIX models are only computed for solar metallicity stars. Setting stellar_metallicity = 0.')
         stellar_metallicity = 0
-    elif stellar_model == 'phoenix' and filter_name in ['irac1', 'irac2', 'irac3', 'irac4']:
-        print('PHOENIX models are not available for this filter. Setting stellar_model = atlas')
-        stellar_model = 'atlas'
-    elif stellar_model == 'atlas' and filter_name in ['CHEOPS']:
-        print('ATLAS models are not available for this filter. Setting stellar_model = phoenix')
-        stellar_model = 'phoenix'
 
     data = open_dict(os.path.join(plc_data.exotethys(), '{0}_{1}.pickle'.format(stellar_model, filter_name)))
 

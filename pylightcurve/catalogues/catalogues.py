@@ -1,6 +1,7 @@
 
 __all__ = ['get_planet', 'get_all_planets', 'locate_planet']
 
+import numpy as np
 
 from pylightcurve.errors import *
 from pylightcurve.__databases__ import plc_data
@@ -51,11 +52,57 @@ def _search_by_planet(name):
 
 
 def get_all_planets():
+    """List the planets in the Exoplanet Characterisation Catalogue.
+
+    Returns
+    -------
+    list of str
+        Names of all the planets that :func:`get_planet` can create.
+
+    Examples
+    --------
+    >>> import pylightcurve as plc
+    >>> names = plc.get_all_planets()
+
+    """
 
     return list(plc_data.ecc()['planets'].keys())
 
 
 def get_planet(name):
+    """Create a :class:`Planet` from the Exoplanet Characterisation Catalogue.
+
+    The stellar and planetary parameters are taken from the Exoplanet
+    Characterisation Catalogue (ECC), developed as part of the
+    `ExoClock project <https://www.exoclock.space>`_
+    (`Kokori et al. 2020 <https://ui.adsabs.harvard.edu/abs/2020arXiv201207478K/abstract>`_).
+
+    Parameters
+    ----------
+    name : str
+        Name of the planet. The search ignores case, spaces and hyphens, and accepts
+        some alternative names, so ``'HD209458b'``, ``'hd 209458 b'`` and
+        ``'HD-209458b'`` are equivalent. See :func:`get_all_planets` for the available
+        names.
+
+    Returns
+    -------
+    Planet
+        The planet, with the default options of :class:`Planet`. The full catalogue
+        entries are stored in its ``all_data`` attribute.
+
+    Raises
+    ------
+    PyLCInputError
+        If the planet is not in the catalogue.
+
+    Examples
+    --------
+    >>> import pylightcurve as plc
+    >>> planet = plc.get_planet('HD209458b')
+    >>> planet.transit_duration('COUSINS_R')
+
+    """
 
     name = _search_by_planet(name)
 
@@ -85,19 +132,50 @@ def get_planet(name):
 
 
 def locate_planet(ra, dec, radius=Degrees(0, 1, 0)):
+    """Find the catalogue planet closest to a position on the sky.
 
-    if isinstance(ra, float):
-        ra = Degrees(ra)
+    Parameters
+    ----------
+    ra : float or Degrees or Hours or Rad
+        Right ascension. A number is in degrees.
+    dec : float or Degrees or Hours or Rad
+        Declination. A number is in degrees.
+    radius : float or Degrees or Hours or Rad, optional
+        Search radius. A number is in degrees. Default is 1 arcminute.
+
+    Returns
+    -------
+    Planet
+        The planet closest to the position, created with :func:`get_planet`.
+
+    Raises
+    ------
+    PyLCLibraryError
+        If no planet is within ``radius``.
+
+    Notes
+    -----
+    This function creates every planet in the catalogue, so it takes some time.
+
+    Examples
+    --------
+    >>> import pylightcurve as plc
+    >>> planet = plc.locate_planet(plc.Hours('22:03:10.77'), plc.Degrees('+18:53:03.5'))
+
+    """
+
+    if isinstance(ra, (int, float, np.integer, np.floating)):
+        ra = Degrees(float(ra))
     else:
         _request_angle(ra)
 
-    if isinstance(dec, float):
-        dec = Degrees(dec)
+    if isinstance(dec, (int, float, np.integer, np.floating)):
+        dec = Degrees(float(dec))
     else:
         _request_angle(dec)
 
-    if isinstance(radius, float):
-        radius = Degrees(radius)
+    if isinstance(radius, (int, float, np.integer, np.floating)):
+        radius = Degrees(float(radius))
     else:
         _request_angle(radius)
 

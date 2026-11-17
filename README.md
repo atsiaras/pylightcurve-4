@@ -1,10 +1,12 @@
-[![Build Python 3.8](https://github.com/ucl-exoplanets/pylightcurve/actions/workflows/build-python-3.8.yml/badge.svg)](https://github.com/ucl-exoplanets/pylightcurve/actions/workflows/build-python-3.8.yml)
-[![Build Python 3.9](https://github.com/ucl-exoplanets/pylightcurve/actions/workflows/build-python-3.9.yml/badge.svg)](https://github.com/ucl-exoplanets/pylightcurve/actions/workflows/build-python-3.9.yml)
-[![Build Python 3.10](https://github.com/ucl-exoplanets/pylightcurve/actions/workflows/build-python-3.10.yml/badge.svg)](https://github.com/ucl-exoplanets/pylightcurve/actions/workflows/build-python-3.10.yml)
-[![Build Python 3.11](https://github.com/ucl-exoplanets/pylightcurve/actions/workflows/build-python-3.11.yml/badge.svg)](https://github.com/ucl-exoplanets/pylightcurve/actions/workflows/build-python-3.11.yml)
+[![Build Python 3.11](https://github.com/atsiaras/pylightcurve-4/actions/workflows/build-python-3.11.yml/badge.svg)](https://github.com/atsiaras/pylightcurve-4/actions/workflows/build-python-3.11.yml)
+[![Build Python 3.12](https://github.com/atsiaras/pylightcurve-4/actions/workflows/build-python-3.12.yml/badge.svg)](https://github.com/atsiaras/pylightcurve-4/actions/workflows/build-python-3.12.yml)
+[![Build Python 3.13](https://github.com/atsiaras/pylightcurve-4/actions/workflows/build-python-3.13.yml/badge.svg)](https://github.com/atsiaras/pylightcurve-4/actions/workflows/build-python-3.13.yml)
+[![Build Python 3.14](https://github.com/atsiaras/pylightcurve-4/actions/workflows/build-python-3.14.yml/badge.svg)](https://github.com/atsiaras/pylightcurve-4/actions/workflows/build-python-3.14.yml)
+[![Build Python 3.15](https://github.com/atsiaras/pylightcurve-4/actions/workflows/build-python-3.15.yml/badge.svg)](https://github.com/atsiaras/pylightcurve-4/actions/workflows/build-python-3.15.yml)
 
 
-[![codecov](https://codecov.io/gh/ucl-exoplanets/pylightcurve/branch/master/graph/badge.svg?)](https://codecov.io/gh/ucl-exoplanets/pylightcurve)
+
+[![codecov](https://github.com/atsiaras/pylightcurve-4/branch/master/graph/badge.svg?)](https://github.com/atsiaras/pylightcurve-4)
 
 [![Downloads](https://pepy.tech/badge/pylightcurve)](https://pepy.tech/project/pylightcurve)
 
@@ -12,7 +14,7 @@
 
 A python package for analysing exoplanet light-curves.
 
-<img src="https://github.com/ucl-exoplanets/pylightcurve/blob/master/logo.png" width="25%">
+<img src="https://github.com/atsiaras/pylightcurve-4/blob/master/logo.png" width="25%">
 
 In PyLightcurve you will find tools for:
 
@@ -44,7 +46,7 @@ If you are using PyLightcurve for your research please cite all the above refere
 [Tsiaras et al. 2016](https://ui.adsabs.harvard.edu/abs/2016ApJ...832..202T/abstract)
 
 
-# Updates in version 4.0
+# Updates in version 4.0 compared to version 3.0
 
 #### Deprecation notice
 
@@ -87,7 +89,7 @@ pip install pylightcurve
 ... or download this repo, cd in it and use the setup.py file:
  
 ```bash
-git clone https://github.com/ucl-exoplanets/pylightcurve
+git clone https://github.com/atsiaras/pylightcurve-4
 cd pylightcurve
 python setup.py install
 ```
@@ -99,10 +101,10 @@ https://github.com/ucl-exoplanets/pylightcurve/tree/pylightcurve-3
 
 # Usage
 
-## Exoplanets - using the plc.Planet object
+## Exoplanets - using the plc.Planet class
 
 In Pylightcurve 4.0.0 we can access all the old and new calculations related to 
-exoplanets through the newly introduced plc.Planet object. These calculation aare:
+exoplanets through the newly introduced plc.Planet class. These calculation aare:
 - limb-darkening coefficients
 - transit model
 - transit data fitting
@@ -175,14 +177,14 @@ planet = plc.Planet(
 )
 ```
 
-We can quickly create a plc.Planet object based on catalague data as follows: 
+We can quickly create a plc.Planet object based on catalogue data as follows: 
 
 ```python
 planet = plc.get_planet('hd209458b')
 ```
 
-At the moment the data provided are base on the Exoplanet Characterisation Catalogue (ECC) developed as part of the 
-ExoClock Project. The catalogue contains 370 objects and will gradually expand in future releases.
+At the moment the data provided are based on the Exoplanet Characterisation Catalogue (ECC) developed as part of the 
+ExoClock Project. The catalogue contains ~700 objects and will gradually expand in future releases.
 
 To retrieve a list of all the available planet names we can type:
 
@@ -235,7 +237,7 @@ filters:
 In these default calculations:
 - the rp_over_rs is equal to the value defined when creating the plc.Planet object,
 - the limb-darkening coefficients are calculated using the filter response curves, together 
-    with the stellar parameters, the ldc_method and the the ldc_stellar_model defined when 
+    with the stellar parameters, the ldc_method and the ldc_stellar_model defined when 
     creating the plc.Planet object (more in the [ExoTETHyS](https://github.com/ucl-exoplanets/ExoTETHyS) package),
 - the planet-to-star flux ratio (reflected + emmitted) is calculated using the albedo and 
     the emissivity defined when creating the plc.Planet object, assuming the star are 
@@ -248,7 +250,7 @@ fp_over_fs = planet.filter('COUSINS_R').fp_over_fs
 rp_over_rs = planet.filter('COUSINS_R').rp_over_rs # no difference from planet.rp_over_rs if we have not defined our own filter
 ```
 
-Of course we can define additional filters (that can be accessed in the same way) or alter 
+We can define additional filters (that can be accessed in the same way) or alter 
 the parameters in the existing filters by typing:
 
 ```python
@@ -608,21 +610,53 @@ mid_time_in_bjd_tdb = target.convert_to_bjd_tdb(mid_time_in_hjd_utc, 'HJD_UTC')
 ```
 
 
-## Updates
-4.0.1
-- Fixed packaging and test issues.
+## Changelog
 
-4.0.2 
-- Database updates checked in memory.
-- Fixed database updating loop.
+4.0.5
 
-4.0.3
-- Fix np.float bug.
+- New documentation, with docstrings for the whole public API.
+- Fixed the MCMC burn-in: with emcee 3, `burn_in` now removes the first samples of
+  the chain, instead of samples spread over the whole chain.
+- Fixed `eclipse_integrated`, which could show a spurious dip near the transit
+  phase.
+- Fixed the classification of observations as transits or eclipses.
+- `eclipse_fitting` no longer changes `planet.eclipse_mid_time`.
+- Fixed the per-observation reduced chi-squared in the fitting diagnostics.
+- Fixed the `force_same_rp_over_rs` and `force_same_fp_over_fs` fitting settings,
+  which stored the opposite value.
+- Plots: the corner plot includes fitted parameters whose initial value is 0, and
+  the trace plots use the upper uncertainty for the upper limits.
+- Limb-darkening coefficients for the Spitzer/IRAC filters always use the ATLAS
+  models, also for non-solar metallicity.
+- Angles can be given as integers in `Planet` and `locate_planet`.
+- Fixed `FixedTarget.convert_to_jd` and `convert_to_mjd` for arrays of times, and
+  made `distance_on_sphere` accurate for small distances.
+- Fixed the printing of fractional seconds in `dms()` and `hms()`.
+- Fixed `find_single_star` for stars beyond the number of rows of the image.
+- `one_d_distribution` and `two_d_distribution` give a clear error for identical
+  values, and the confidence intervals include the central bin correctly.
+- Downloads verify SSL certificates (using `certifi`) and no longer leave partial
+  files.
+- Database fixes: clearer errors when a database is not available, and fixes in
+  updating and extracting the databases.
+- Tested with Python 3.12.
 
 4.0.4
 - Fixed packaging and test issues.
 - Fixed latex strings in plots.
 - Fixed matplotlib.cm.get_cmap bug.
+
+4.0.3
+- Fix np.float bug.
+
+4.0.2 
+- Database updates checked in memory.
+- Fixed database updating loop.
+
+4.0.1
+- Fixed packaging and test issues.
+
+
 
 ## Licence
 

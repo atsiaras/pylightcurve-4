@@ -16,6 +16,30 @@ from pylightcurve.spacetime.targets import FixedTarget
 
 
 class Filter:
+    """Filter-dependent parameters of a planet.
+
+    ``Filter`` objects are created by :meth:`Planet.filter` and :meth:`Planet.add_filter`;
+    you do not normally create them yourself.
+
+    Parameters
+    ----------
+    rp_over_rs : float
+        Planet-to-star radius ratio, Rp/R*, in this filter.
+    ldc1, ldc2, ldc3, ldc4 : float
+        Limb-darkening coefficients in this filter.
+    fp_over_fs : float
+        Planet-to-star flux ratio, Fp/F*, in this filter.
+
+    Attributes
+    ----------
+    rp_over_rs : float
+        Planet-to-star radius ratio.
+    limb_darkening_coefficients : list of float
+        ``[ldc1, ldc2, ldc3, ldc4]``.
+    fp_over_fs : float
+        Planet-to-star flux ratio.
+
+    """
 
     def __init__(self, rp_over_rs, ldc1, ldc2, ldc3, ldc4, fp_over_fs):
 
@@ -25,6 +49,101 @@ class Filter:
 
 
 class Planet:
+    """A transiting planet and its host star.
+
+    A ``Planet`` gives access to the PyLightcurve calculations (limb darkening, orbits,
+    transit and eclipse models) without passing the stellar and orbital parameters
+    every time, and accepts times in any of the supported time systems. Observations
+    can be added to it with :meth:`add_observation` and fitted with
+    :meth:`transit_fitting` or :meth:`eclipse_fitting`.
+
+    To create a planet from the Exoplanet Characterisation Catalogue, use
+    :func:`get_planet`.
+
+    Parameters
+    ----------
+    name : str
+        Name of the planet.
+    ra : float or Degrees or Hours or Rad
+        Right ascension of the host star. A number is in degrees.
+    dec : float or Degrees or Hours or Rad
+        Declination of the host star. A number is in degrees.
+    stellar_logg : float
+        Surface gravity of the host star, log(g) in cm/s^2.
+    stellar_temperature : float
+        Effective temperature of the host star, in Kelvin.
+    stellar_metallicity : float
+        Metallicity of the host star, in dex ([Fe/H] or [M/H]).
+    rp_over_rs : float
+        Planet-to-star radius ratio, Rp/R*.
+    period : float
+        Orbital period, in days.
+    sma_over_rs : float
+        Orbital semi-major axis in units of the stellar radius, a/R*.
+    eccentricity : float
+        Orbital eccentricity.
+    inclination : float or Degrees or Hours or Rad
+        Orbital inclination. A number is in degrees.
+    periastron : float or Degrees or Hours or Rad
+        Argument of periastron. A number is in degrees.
+    mid_time : float
+        Transit mid-time (conjunction with the planet in front of the star).
+    mid_time_format : str
+        Time system of ``mid_time``: ``'BJD_TDB'``, ``'BJD_TT'``,
+        ``'BJD_UTC'``, ``'HJD_TDB'``, ``'HJD_TT'``, ``'HJD_UTC'``, ``'JD_UTC'`` or
+        ``'MJD_UTC'``.
+    ww : float, optional
+        Longitude of the ascending node, in degrees. Default is 0. It only affects
+        :meth:`planet_orbit`.
+    albedo : float, optional
+        Planet albedo, used to estimate Fp/F*. Default is 0.15.
+    emissivity : float, optional
+        Planet emissivity, used to estimate Fp/F*. Default is 1.0.
+    ldc_method : {'claret', 'quad', 'sqrt', 'linear'}, optional
+        Limb-darkening law. Default is ``'claret'``.
+    ldc_stellar_model : {'phoenix', 'atlas'}, optional
+        Stellar model grid used for the limb-darkening coefficients. Default is
+        ``'phoenix'``. See :func:`pylightcurve.exotethys`.
+
+    Attributes
+    ----------
+    name : str
+        Name of the planet.
+    target : FixedTarget
+        Sky position of the host star, used for the time conversions.
+    mid_time : float
+        Transit mid-time, in BJD_TDB.
+    eclipse_mid_time : float
+        Mid-time of the eclipse that follows ``mid_time``, in BJD_TDB.
+    filters : dict
+        The :class:`~pylightcurve.models.exoplanet.Filter` objects calculated or added
+        so far, by filter name.
+    observations : dict
+        The observations added with :meth:`add_observation`, by integer id.
+    all_data : dict
+        Only for planets created with :func:`get_planet`: the catalogue entries of the
+        planet (``'planet'``) and of the star (``'star'``).
+
+    The other parameters are stored as attributes with the same names (inclination
+    and periastron in degrees).
+
+    Raises
+    ------
+    PyLCInputError
+        If an angle is neither a number nor an angle object, or if ``dec`` is outside
+        -90 to 90 degrees.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pylightcurve as plc
+    >>> planet = plc.Planet('HD209458b', 330.795, 18.884, 4.36, 6065.0, 0.0,
+    ...                     0.12086, 3.5247486, 8.76, 0.0, 86.71, 0.0,
+    ...                     2452826.62928, 'BJD_TDB')
+    >>> time = np.arange(planet.mid_time - 0.1, planet.mid_time + 0.1, 0.001)
+    >>> flux = planet.transit(time, 'BJD_TDB', 'COUSINS_R')
+
+    """
 
     def __init__(self, name, ra, dec, stellar_logg, stellar_temperature, stellar_metallicity,
                  rp_over_rs, period, sma_over_rs, eccentricity, inclination,
@@ -32,24 +151,24 @@ class Planet:
                  albedo=0.15, emissivity=1.0,
                  ldc_method='claret', ldc_stellar_model='phoenix'):
 
-        if isinstance(ra, float):
-            ra = Degrees(ra)
+        if isinstance(ra, (int, float, np.integer, np.floating)):
+            ra = Degrees(float(ra))
         else:
             _request_angle(ra)
 
-        if isinstance(dec, float):
-            dec = Degrees(dec)
+        if isinstance(dec, (int, float, np.integer, np.floating)):
+            dec = Degrees(float(dec))
         else:
             _request_angle(dec)
 
-        if isinstance(inclination, float):
-            pass
+        if isinstance(inclination, (int, float, np.integer, np.floating)):
+            inclination = float(inclination)
         else:
             _request_angle(inclination)
             inclination = inclination.deg()
 
-        if isinstance(periastron, float):
-            pass
+        if isinstance(periastron, (int, float, np.integer, np.floating)):
+            periastron = float(periastron)
         else:
             _request_angle(periastron)
             periastron = periastron.deg()
@@ -83,6 +202,38 @@ class Planet:
     # filter-dependent values
 
     def filter(self, filter_name):
+        """Get the filter-dependent parameters of the planet.
+
+        The first time a filter is requested, its limb-darkening coefficients are
+        calculated with :func:`pylightcurve.exotethys` and its planet-to-star flux ratio
+        with :func:`pylightcurve.fp_over_fs` (using the planet's ``albedo`` and
+        ``emissivity``), and Rp/R* is set to the planet's ``rp_over_rs``. The result is
+        stored in :attr:`filters` and reused. To use your own values, call
+        :meth:`add_filter` first.
+
+        Parameters
+        ----------
+        filter_name : str
+            Name of a built-in filter (see :doc:`/user_guide/filters`) or of a filter
+            added with :meth:`add_filter`.
+
+        Returns
+        -------
+        Filter
+            Object with the ``rp_over_rs``, ``limb_darkening_coefficients`` and
+            ``fp_over_fs`` attributes.
+
+        Raises
+        ------
+        PyLCInputError
+            If the filter is neither built in nor added with :meth:`add_filter`.
+
+        Examples
+        --------
+        >>> planet = plc.get_planet('HD209458b')
+        >>> planet.filter('COUSINS_R').limb_darkening_coefficients
+
+        """
 
         if filter_name in self.filters:
             return self.filters[filter_name]
@@ -106,26 +257,129 @@ class Planet:
                                      (filter_name))
 
     def add_filter(self, filter_name, rp_over_rs, ldc1, ldc2, ldc3, ldc4, fp):
+        """Set the filter-dependent parameters of the planet for a filter.
+
+        Use it to define a new filter or to replace the default values of a built-in
+        one. The name can then be used in every method that takes ``filter_name``.
+
+        Parameters
+        ----------
+        filter_name : str
+            Name of the filter.
+        rp_over_rs : float
+            Planet-to-star radius ratio, Rp/R*, in this filter.
+        ldc1, ldc2, ldc3, ldc4 : float
+            Limb-darkening coefficients, for the planet's ``ldc_method``.
+        fp : float
+            Planet-to-star flux ratio, Fp/F*, in this filter.
+
+        """
 
         self.filters[filter_name] = Filter(rp_over_rs, ldc1, ldc2, ldc3, ldc4, fp)
 
     # planet calculations
 
     def planet_orbit(self, time, time_format):
+        """Calculate the position of the planet on its orbit.
+
+        Parameters
+        ----------
+        time : array_like
+            Times at which to evaluate the model.
+        time_format : str
+            Time system of ``time``: ``'BJD_TDB'``, ``'BJD_TT'``, ``'BJD_UTC'``,
+            ``'HJD_TDB'``, ``'HJD_TT'``, ``'HJD_UTC'``, ``'JD_UTC'`` or ``'MJD_UTC'``.
+            The times are converted to BJD_TDB with
+            :meth:`FixedTarget.convert_to_bjd_tdb`.
+
+        Returns
+        -------
+        list of numpy.ndarray
+            ``[x, y, z]``, in units of the stellar radius. See
+            :func:`pylightcurve.planet_orbit` for the coordinate frame.
+
+        """
         time = self.target.convert_to_bjd_tdb(time, time_format)
         return planet_orbit(self.period, self.sma_over_rs, self.eccentricity, self.inclination, self.periastron,
                             self.mid_time, time, ww=self.ww)
 
     def planet_star_projected_distance(self, time, time_format):
+        """Calculate the planet-star distance projected on the sky.
+
+        Parameters
+        ----------
+        time : array_like
+            Times at which to evaluate the model.
+        time_format : str
+            Time system of ``time``: ``'BJD_TDB'``, ``'BJD_TT'``, ``'BJD_UTC'``,
+            ``'HJD_TDB'``, ``'HJD_TT'``, ``'HJD_UTC'``, ``'JD_UTC'`` or ``'MJD_UTC'``.
+            The times are converted to BJD_TDB with
+            :meth:`FixedTarget.convert_to_bjd_tdb`.
+
+        Returns
+        -------
+        numpy.ndarray
+            Projected distance at each time, in units of the stellar radius.
+
+        """
         time = self.target.convert_to_bjd_tdb(time, time_format)
         return planet_star_projected_distance(self.period, self.sma_over_rs, self.eccentricity, self.inclination,
                                               self.periastron, self.mid_time, time)
 
     def planet_phase(self, time, time_format):
+        """Calculate the orbital phase of the planet.
+
+        Parameters
+        ----------
+        time : array_like
+            Times at which to evaluate the model.
+        time_format : str
+            Time system of ``time``: ``'BJD_TDB'``, ``'BJD_TT'``, ``'BJD_UTC'``,
+            ``'HJD_TDB'``, ``'HJD_TT'``, ``'HJD_UTC'``, ``'JD_UTC'`` or ``'MJD_UTC'``.
+            The times are converted to BJD_TDB with
+            :meth:`FixedTarget.convert_to_bjd_tdb`.
+
+        Returns
+        -------
+        numpy.ndarray
+            ``(time - mid_time) / period``, with ``time`` in BJD_TDB. The phase is 0 at
+            mid-transit and is not wrapped.
+
+        """
         time = np.array([self.target.convert_to_bjd_tdb(ff, time_format) for ff in time])
         return planet_phase(self.period, self.mid_time, time)
 
     def transit(self, time, time_format, filter_name, precision=3):
+        """Calculate a transit light curve.
+
+        The flux is evaluated at each time, without integrating over the exposure. For
+        observed data, use :meth:`transit_integrated`.
+
+        Parameters
+        ----------
+        time : array_like
+            Times at which to evaluate the model.
+        time_format : str
+            Time system of ``time``: ``'BJD_TDB'``, ``'BJD_TT'``, ``'BJD_UTC'``,
+            ``'HJD_TDB'``, ``'HJD_TT'``, ``'HJD_UTC'``, ``'JD_UTC'`` or ``'MJD_UTC'``.
+            The times are converted to BJD_TDB with
+            :meth:`FixedTarget.convert_to_bjd_tdb`.
+        filter_name : str
+            Name of the filter. See :meth:`filter`.
+        precision : int, optional
+            Precision of the numerical integration, from 0 to 6. Default is 3. See
+            :func:`pylightcurve.transit`.
+
+        Returns
+        -------
+        numpy.ndarray
+            Relative flux of the star, equal to 1 outside the transit.
+
+        See Also
+        --------
+        pylightcurve.transit
+
+        """
         filter_data = self.filter(filter_name)
         time = self.target.convert_to_bjd_tdb(time, time_format)
 
@@ -135,6 +389,46 @@ class Planet:
                        method=self.ldc_method, precision=precision)
 
     def transit_integrated(self, time, time_format, exp_time, time_stamp, filter_name, max_sub_exp_time=10, precision=3):
+        """Calculate a transit light curve integrated over the exposure time.
+
+        Parameters
+        ----------
+        time : array_like
+            Times at which to evaluate the model.
+        time_format : str
+            Time system of ``time``: ``'BJD_TDB'``, ``'BJD_TT'``, ``'BJD_UTC'``,
+            ``'HJD_TDB'``, ``'HJD_TT'``, ``'HJD_UTC'``, ``'JD_UTC'`` or ``'MJD_UTC'``.
+            The times are converted to BJD_TDB with
+            :meth:`FixedTarget.convert_to_bjd_tdb`.
+        exp_time : float
+            Exposure time, in seconds.
+        time_stamp : {'start', 'mid', 'end'}
+            Whether each value of ``time`` refers to the start, the middle or the end of
+            the exposure.
+        filter_name : str
+            Name of the filter. See :meth:`filter`.
+        max_sub_exp_time : float, optional
+            Maximum duration of the sub-exposures used for the integration, in seconds.
+            Default is 10.
+        precision : int, optional
+            Precision of the numerical integration, from 0 to 6. Default is 3. See
+            :func:`pylightcurve.transit`.
+
+        Returns
+        -------
+        numpy.ndarray
+            Relative flux of the star averaged over each exposure.
+
+        Raises
+        ------
+        PyLCInputError
+            If ``time_stamp`` is not valid.
+
+        See Also
+        --------
+        pylightcurve.transit_integrated
+
+        """
 
         if time_stamp == 'start':
             time = np.array(time) + 0.5 * exp_time / (60.0 * 60.0 * 24.0)
@@ -156,11 +450,40 @@ class Planet:
                                   method=self.ldc_method, precision=precision)
 
     def transit_duration(self, filter_name):
+        """Calculate the total transit duration, T14.
+
+        Parameters
+        ----------
+        filter_name : str
+            Name of the filter. See :meth:`filter`. Rp/R* can differ between filters.
+
+        Returns
+        -------
+        float
+            Transit duration, in days.
+
+        """
         filter_data = self.filter(filter_name)
         return transit_duration(filter_data.rp_over_rs,
                                 self.period, self.sma_over_rs, self.eccentricity, self.inclination, self.periastron)
 
     def transit_depth(self, filter_name, precision=6):
+        """Calculate the transit depth at mid-transit, including limb darkening.
+
+        Parameters
+        ----------
+        filter_name : str
+            Name of the filter. See :meth:`filter`.
+        precision : int, optional
+            Precision of the numerical integration, from 0 to 6. Default is 6. See
+            :func:`pylightcurve.transit`.
+
+        Returns
+        -------
+        float
+            Transit depth, as 1 minus the relative flux at mid-transit.
+
+        """
         filter_data = self.filter(filter_name)
         return transit_depth(filter_data.limb_darkening_coefficients,
                              filter_data.rp_over_rs, self.period, self.sma_over_rs, self.eccentricity,
@@ -168,6 +491,37 @@ class Planet:
                              method=self.ldc_method, precision=precision)
 
     def eclipse(self, time, time_format, filter_name, precision=3):
+        """Calculate a secondary eclipse light curve.
+
+        The eclipse is centred on :attr:`eclipse_mid_time`. The flux is evaluated at each
+        time, without integrating over the exposure. For observed data, use
+        :meth:`eclipse_integrated`.
+
+        Parameters
+        ----------
+        time : array_like
+            Times at which to evaluate the model.
+        time_format : str
+            Time system of ``time``: ``'BJD_TDB'``, ``'BJD_TT'``, ``'BJD_UTC'``,
+            ``'HJD_TDB'``, ``'HJD_TT'``, ``'HJD_UTC'``, ``'JD_UTC'`` or ``'MJD_UTC'``.
+            The times are converted to BJD_TDB with
+            :meth:`FixedTarget.convert_to_bjd_tdb`.
+        filter_name : str
+            Name of the filter. See :meth:`filter`.
+        precision : int, optional
+            Precision of the numerical integration, from 0 to 6. Default is 3. See
+            :func:`pylightcurve.transit`.
+
+        Returns
+        -------
+        numpy.ndarray
+            Relative flux of the system, equal to 1 outside the eclipse.
+
+        See Also
+        --------
+        pylightcurve.eclipse
+
+        """
         filter_data = self.filter(filter_name)
         time = self.target.convert_to_bjd_tdb(time, time_format)
 
@@ -176,6 +530,46 @@ class Planet:
                        self.inclination, self.periastron, self.eclipse_mid_time, time, precision=precision)
 
     def eclipse_integrated(self, time, time_format, exp_time, time_stamp, filter_name, max_sub_exp_time=10, precision=3):
+        """Calculate a secondary eclipse light curve integrated over the exposure time.
+
+        Parameters
+        ----------
+        time : array_like
+            Times at which to evaluate the model.
+        time_format : str
+            Time system of ``time``: ``'BJD_TDB'``, ``'BJD_TT'``, ``'BJD_UTC'``,
+            ``'HJD_TDB'``, ``'HJD_TT'``, ``'HJD_UTC'``, ``'JD_UTC'`` or ``'MJD_UTC'``.
+            The times are converted to BJD_TDB with
+            :meth:`FixedTarget.convert_to_bjd_tdb`.
+        exp_time : float
+            Exposure time, in seconds.
+        time_stamp : {'start', 'mid', 'end'}
+            Whether each value of ``time`` refers to the start, the middle or the end of
+            the exposure.
+        filter_name : str
+            Name of the filter. See :meth:`filter`.
+        max_sub_exp_time : float, optional
+            Maximum duration of the sub-exposures used for the integration, in seconds.
+            Default is 10.
+        precision : int, optional
+            Precision of the numerical integration, from 0 to 6. Default is 3. See
+            :func:`pylightcurve.transit`.
+
+        Returns
+        -------
+        numpy.ndarray
+            Relative flux of the system averaged over each exposure.
+
+        Raises
+        ------
+        PyLCInputError
+            If ``time_stamp`` is not valid.
+
+        See Also
+        --------
+        pylightcurve.eclipse_integrated
+
+        """
 
         if time_stamp == 'start':
             time = np.array(time) + 0.5 * exp_time / (60.0 * 60.0 * 24.0)
@@ -196,11 +590,40 @@ class Planet:
                                   max_sub_exp_time=max_sub_exp_time, precision=precision)
 
     def eclipse_duration(self, filter_name):
+        """Calculate the total eclipse duration.
+
+        Parameters
+        ----------
+        filter_name : str
+            Name of the filter. See :meth:`filter`.
+
+        Returns
+        -------
+        float
+            Eclipse duration, in days.
+
+        """
         filter_data = self.filter(filter_name)
         return eclipse_duration(filter_data.rp_over_rs, self.period, self.sma_over_rs, self.eccentricity,
                                 self.inclination, self.periastron)
 
     def eclipse_depth(self, filter_name, precision=6):
+        """Calculate the eclipse depth at mid-eclipse.
+
+        Parameters
+        ----------
+        filter_name : str
+            Name of the filter. See :meth:`filter`.
+        precision : int, optional
+            Precision of the numerical integration, from 0 to 6. Default is 6. See
+            :func:`pylightcurve.transit`.
+
+        Returns
+        -------
+        float
+            Eclipse depth, as 1 minus the relative flux at mid-eclipse.
+
+        """
         filter_data = self.filter(filter_name)
         return eclipse_depth(filter_data.fp_over_fs, filter_data.rp_over_rs, self.period,
                              self.sma_over_rs, self.eccentricity, self.inclination, self.periastron,
@@ -209,6 +632,46 @@ class Planet:
     # data fitting
 
     def add_observation(self, time, time_format, exp_time, time_stamp, flux, flux_unc, flux_format, filter_name):
+        """Add a light curve to the planet, for fitting.
+
+        The times are converted to BJD_TDB at mid-exposure, and magnitudes to relative
+        flux. The observation is classed as a transit or an eclipse, whichever is closer in
+        phase to the mean time of the data, and stored in :attr:`observations` under the
+        lowest free integer id.
+
+        Add either only transits (and fit them with :meth:`transit_fitting`) or only
+        eclipses (and fit them with :meth:`eclipse_fitting`).
+
+        Parameters
+        ----------
+        time : array_like
+            Times of the data points.
+        time_format : str
+            Time system of ``time``: ``'BJD_TDB'``, ``'BJD_TT'``,
+            ``'BJD_UTC'``, ``'HJD_TDB'``, ``'HJD_TT'``, ``'HJD_UTC'``, ``'JD_UTC'`` or
+            ``'MJD_UTC'``.
+        exp_time : float
+            Exposure time, in seconds.
+        time_stamp : {'start', 'mid', 'end'}
+            Whether each value of ``time`` refers to the start, the middle or the end of
+            the exposure.
+        flux : array_like
+            Flux values, or magnitudes.
+        flux_unc : array_like
+            Uncertainties of ``flux``, in the same units.
+        flux_format : {'flux', 'mag'}
+            Format of ``flux`` and ``flux_unc``. Magnitudes are converted to flux relative
+            to the first data point.
+        filter_name : str
+            Filter of the observation. See :meth:`filter`.
+
+        Raises
+        ------
+        PyLCInputError
+            If ``time_stamp``, ``time_format``, ``flux_format`` or ``filter_name`` is not
+            valid.
+
+        """
 
         filter_data = self.filter(filter_name)
 
@@ -252,10 +715,10 @@ class Planet:
             obs_id += 1
 
         check_transit = (np.mean(time) - self.mid_time) / self.period
-        check_transit = abs(check_transit - int(check_transit))
+        check_transit = abs(check_transit - round(check_transit))
 
         check_eclipse = (np.mean(time) - self.eclipse_mid_time) / self.period
-        check_eclipse = abs(check_eclipse - int(check_eclipse))
+        check_eclipse = abs(check_eclipse - round(check_eclipse))
 
         if check_transit < check_eclipse:
             observation_type = 'transit'
@@ -303,6 +766,94 @@ class Planet:
                         fit_period_limits=[0.8, 1.2],
 
                         counter='MCMC'):
+        """Fit all the transit observations added to the planet.
+
+        All observations are fitted together with MCMC (:class:`EmceeFitting`). Each
+        observation is modelled as::
+
+            N * (1 + L * dt + Q * dt^2) * transit
+
+        where ``dt`` is the time since the first data point of the observation, in days,
+        ``N``, ``L`` and ``Q`` are fitted separately for each observation, and
+        ``transit`` is the exposure-integrated model. Limb-darkening coefficients are
+        shared by observations in the same filter, and Rp/R* can be fitted per filter. The
+        eccentricity and the argument of periastron are always fixed.
+
+        The results are saved in ``output_folder`` and nothing is returned. See
+        :doc:`/user_guide/fitting` for the output files.
+
+        Parameters
+        ----------
+        output_folder : str
+            Folder in which to save the results. It is created if it does not exist;
+            existing files with the same names are overwritten.
+        max_sub_exp_time : float, optional
+            Maximum duration of the sub-exposures used for the integration, in seconds.
+            Default is 10.
+        precision : int, optional
+            Precision of the numerical integration, from 0 to 6. Default is 3. See
+            :func:`pylightcurve.transit`.
+        detrending_order : {0, 1, 2}, optional
+            Order of the polynomial trend of each observation: 0 fixes ``L`` and ``Q`` to 0,
+            1 fixes ``Q`` to 0. Default is 2.
+        iterations : int, optional
+            Total number of MCMC samples, summed over all walkers. Default is 130000.
+        walkers : int, optional
+            Number of MCMC walkers. Default is 200.
+        burn_in : int, optional
+            Number of samples, summed over all walkers, discarded from the start of the
+            chain. Default is 30000.
+        fit_ldc1, fit_ldc2, fit_ldc3, fit_ldc4 : bool, optional
+            Fit the corresponding limb-darkening coefficient. Default is ``False``.
+        fit_rp_over_rs : bool, optional
+            Fit Rp/R*. Default is ``True``.
+        fit_individual_rp_over_rs : bool, optional
+            Fit a separate Rp/R* for each filter. Default is ``True``.
+        fit_sma_over_rs : bool, optional
+            Fit a/R*. Default is ``False``.
+        fit_inclination : bool, optional
+            Fit the inclination. Default is ``False``.
+        fit_mid_time : bool, optional
+            Fit the mid-time(s). Default is ``True``.
+        fit_period : bool, optional
+            Fit the period. Cannot be combined with ``fit_individual_times``. Default is
+            ``False``.
+        fit_individual_times : bool, optional
+            Fit a separate mid-time for each epoch. Default is ``True``.
+        fit_ldc_limits : list of float, optional
+            Prior limits for the limb-darkening coefficients. Default is ``[0.0, 1.0]``.
+        fit_rp_over_rs_limits : list of float, optional
+            Prior limits for Rp/R*, as factors of its initial value. Default is
+            ``[0.5, 2.0]``.
+        fit_sma_over_rs_limits : list of float, optional
+            Prior limits for a/R*, as factors of its initial value. Default is
+            ``[0.5, 2.0]``.
+        fit_inclination_limits : list of float, optional
+            Prior limits for the inclination, in degrees. Default is ``[70.0, 90.0]``.
+        fit_mid_time_limits : list of float, optional
+            Prior limits for the mid-time(s), in days, relative to the predicted mid-time.
+            Default is ``[-0.2, 0.2]``.
+        fit_period_limits : list of float, optional
+            Prior limits for the period, as factors of its initial value. Default is
+            ``[0.8, 1.2]``.
+        counter : str, optional
+            Label of the progress counter. Default is ``'MCMC'``.
+
+        Raises
+        ------
+        PyLCInputError
+            If both ``fit_period`` and ``fit_individual_times`` are ``True``.
+
+        Notes
+        -----
+        The mid-time is fitted at a reference epoch near the middle of the data
+        (weighted by the flux uncertainties), named ``T_0``, or, with
+        ``fit_individual_times``, separately for each epoch, named ``T_mid_<epoch>``.
+
+        After the fit, each entry of :attr:`observations` also holds its model, residuals
+        and residual statistics, before and after detrending.
+
+        """
 
         if not os.path.isdir(output_folder):
             os.mkdir(output_folder)
@@ -649,7 +1200,7 @@ class Planet:
         results['settings']['fit_ldc3'] = fit_ldc3
         results['settings']['fit_ldc4'] = fit_ldc4
         results['settings']['fit_rp_over_rs'] = fit_rp_over_rs
-        results['settings']['force_same_rp_over_rs'] = fit_individual_rp_over_rs
+        results['settings']['force_same_rp_over_rs'] = not fit_individual_rp_over_rs
         results['settings']['fit_sma_over_rs'] = fit_sma_over_rs
         results['settings']['fit_inclination'] = fit_inclination
         results['settings']['fit_mid_time'] = fit_mid_time
@@ -704,7 +1255,7 @@ class Planet:
                 (self.observations[observation]['residuals'] ** 2) / (self.observations[observation]['flux_unc'] ** 2))
             self.observations[observation]['res_red_chi_sqr'] = (
                     self.observations[observation]['res_chi_sqr'] / (
-                        len(self.observations[observation]['flux_unc']) - len(results['statistics']['corr_variables'])))
+                        len(self.observations[observation]['flux_unc']) - len(results['statistics']['corr_variables'].split(','))))
 
             self.observations[observation]['detrended_flux'] = results['detrended_input_series']['flux'][id_series]
             self.observations[observation]['detrended_flux_unc'] = results['detrended_input_series']['flux_unc'][id_series]
@@ -725,7 +1276,7 @@ class Planet:
                 (self.observations[observation]['detrended_residuals'] ** 2) / (self.observations[observation]['detrended_flux_unc'] ** 2))
             self.observations[observation]['detrended_res_red_chi_sqr'] = (
                     self.observations[observation]['detrended_res_chi_sqr'] / (
-                    len(self.observations[observation]['detrended_flux_unc']) - len(results['statistics']['corr_variables'])))
+                    len(self.observations[observation]['detrended_flux_unc']) - len(results['statistics']['corr_variables'].split(','))))
 
             w = open(os.path.join(output_folder, 'diagnostics_dataset_{0}.txt'.format(observation + 1)), 'w')
             w.write('\n#Residuals:\n')
@@ -782,6 +1333,80 @@ class Planet:
                         fit_period_limits=[0.8, 1.2],
 
                         counter='MCMC'):
+        """Fit all the eclipse observations added to the planet.
+
+        Works like :meth:`transit_fitting`, with the eclipse model in place of the transit
+        model. Each observation is modelled as ``N * (1 + L * dt + Q * dt^2) * eclipse``.
+        The planet-to-star flux ratio is fitted instead of the limb-darkening coefficients.
+
+        The results are saved in ``output_folder`` and nothing is returned. See
+        :doc:`/user_guide/fitting` for the output files.
+
+        Parameters
+        ----------
+        output_folder : str
+            Folder in which to save the results. It is created if it does not exist;
+            existing files with the same names are overwritten.
+        max_sub_exp_time : float, optional
+            Maximum duration of the sub-exposures used for the integration, in seconds.
+            Default is 10.
+        precision : int, optional
+            Precision of the numerical integration, from 0 to 6. Default is 3. See
+            :func:`pylightcurve.transit`.
+        detrending_order : {0, 1, 2}, optional
+            Order of the polynomial trend of each observation. Default is 2.
+        iterations : int, optional
+            Total number of MCMC samples, summed over all walkers. Default is 130000.
+        walkers : int, optional
+            Number of MCMC walkers. Default is 200.
+        burn_in : int, optional
+            Number of samples, summed over all walkers, discarded from the start of the
+            chain. Default is 30000.
+        fit_fp_over_fs : bool, optional
+            Fit Fp/F*. Default is ``True``.
+        fit_individual_fp_over_fs : bool, optional
+            Fit a separate Fp/F* for each filter. Default is ``False``.
+        fit_rp_over_rs : bool, optional
+            Fit Rp/R*. Default is ``False``.
+        fit_individual_rp_over_rs : bool, optional
+            Fit a separate Rp/R* for each filter. Default is ``False``.
+        fit_sma_over_rs : bool, optional
+            Fit a/R*. Default is ``False``.
+        fit_inclination : bool, optional
+            Fit the inclination. Default is ``False``.
+        fit_mid_time : bool, optional
+            Fit the eclipse mid-time(s). Default is ``False``.
+        fit_period : bool, optional
+            Fit the period. Cannot be combined with ``fit_individual_times``. Default is
+            ``False``.
+        fit_individual_times : bool, optional
+            Fit a separate eclipse mid-time for each epoch. Default is ``False``.
+        fit_rp_over_rs_limits : list of float, optional
+            Prior limits for Rp/R*, as factors of its initial value. Default is
+            ``[0.5, 2.0]``.
+        fit_fp_over_fs_limits : list of float, optional
+            Prior limits for Fp/F*, as factors of its initial value. Default is
+            ``[0.001, 1000.0]``.
+        fit_sma_over_rs_limits : list of float, optional
+            Prior limits for a/R*, as factors of its initial value. Default is
+            ``[0.5, 2.0]``.
+        fit_inclination_limits : list of float, optional
+            Prior limits for the inclination, in degrees. Default is ``[70.0, 90.0]``.
+        fit_mid_time_limits : list of float, optional
+            Prior limits for the eclipse mid-time(s), in days, relative to the predicted
+            eclipse mid-time. Default is ``[-0.2, 0.2]``.
+        fit_period_limits : list of float, optional
+            Prior limits for the period, as factors of its initial value. Default is
+            ``[0.8, 1.2]``.
+        counter : str, optional
+            Label of the progress counter. Default is ``'MCMC'``.
+
+        Raises
+        ------
+        PyLCInputError
+            If both ``fit_period`` and ``fit_individual_times`` are ``True``.
+
+        """
 
         if not os.path.isdir(output_folder):
             os.mkdir(output_folder)
@@ -980,16 +1605,16 @@ class Planet:
             if self.observations[observation]['epoch'] not in unique_epochs:
                 unique_epochs.append(self.observations[observation]['epoch'])
 
-        self.eclipse_mid_time += min(unique_epochs) * self.period
+        reference_mid_time = self.eclipse_mid_time + min(unique_epochs) * self.period
 
         if not fit_individual_times:
 
             names.append('T_0')
             print_names.append('T_0')
-            initial.append(self.eclipse_mid_time)
+            initial.append(reference_mid_time)
             if fit_mid_time:
-                limits1.append(self.eclipse_mid_time + fit_mid_time_limits[0])
-                limits2.append(self.eclipse_mid_time + fit_mid_time_limits[1])
+                limits1.append(reference_mid_time + fit_mid_time_limits[0])
+                limits2.append(reference_mid_time + fit_mid_time_limits[1])
             else:
                 limits1.append(np.nan)
                 limits2.append(np.nan)
@@ -1008,10 +1633,10 @@ class Planet:
 
                 names.append('T_{0}'.format(epoch))
                 print_names.append('T_{' + str(epoch) + '}')
-                initial.append(self.eclipse_mid_time + epoch * self.period)
+                initial.append(reference_mid_time + epoch * self.period)
                 if fit_mid_time:
-                    limits1.append(self.eclipse_mid_time + epoch * self.period + fit_mid_time_limits[0])
-                    limits2.append(self.eclipse_mid_time + epoch * self.period + fit_mid_time_limits[1])
+                    limits1.append(reference_mid_time + epoch * self.period + fit_mid_time_limits[0])
+                    limits2.append(reference_mid_time + epoch * self.period + fit_mid_time_limits[1])
                 else:
                     limits1.append(np.nan)
                     limits2.append(np.nan)
@@ -1088,9 +1713,9 @@ class Planet:
         results['settings']['walkers'] = walkers
         results['settings']['burn_in'] = burn_in
         results['settings']['fit_fp_over_fs'] = fit_fp_over_fs
-        results['settings']['force_same_fp_over_fs'] = fit_individual_fp_over_fs
+        results['settings']['force_same_fp_over_fs'] = not fit_individual_fp_over_fs
         results['settings']['fit_rp_over_rs'] = fit_rp_over_rs
-        results['settings']['force_same_rp_over_rs'] = fit_individual_rp_over_rs
+        results['settings']['force_same_rp_over_rs'] = not fit_individual_rp_over_rs
         results['settings']['fit_sma_over_rs'] = fit_sma_over_rs
         results['settings']['fit_inclination'] = fit_inclination
         results['settings']['fit_mid_time'] = fit_mid_time
@@ -1145,7 +1770,7 @@ class Planet:
                 (self.observations[observation]['residuals'] ** 2) / (self.observations[observation]['flux_unc'] ** 2))
             self.observations[observation]['res_red_chi_sqr'] = (
                     self.observations[observation]['res_chi_sqr'] / (
-                        len(self.observations[observation]['flux_unc']) - len(results['statistics']['corr_variables'])))
+                        len(self.observations[observation]['flux_unc']) - len(results['statistics']['corr_variables'].split(','))))
 
             self.observations[observation]['detrended_flux'] = results['detrended_input_series']['flux'][id_series]
             self.observations[observation]['detrended_flux_unc'] = results['detrended_input_series']['flux_unc'][id_series]
@@ -1166,7 +1791,7 @@ class Planet:
                 (self.observations[observation]['detrended_residuals'] ** 2) / (self.observations[observation]['detrended_flux_unc'] ** 2))
             self.observations[observation]['detrended_res_red_chi_sqr'] = (
                     self.observations[observation]['detrended_res_chi_sqr'] / (
-                    len(self.observations[observation]['detrended_flux_unc']) - len(results['statistics']['corr_variables'])))
+                    len(self.observations[observation]['detrended_flux_unc']) - len(results['statistics']['corr_variables'].split(','))))
 
             w = open(os.path.join(output_folder, 'diagnostics_dataset_{0}.txt'.format(observation + 1)), 'w')
             w.write('\n#Residuals:\n')

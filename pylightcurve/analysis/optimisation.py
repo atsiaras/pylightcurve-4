@@ -16,6 +16,100 @@ from pylightcurve.analysis.distributions import one_d_distribution
 
 
 class EmceeFitting:
+    """Fit a model to data with MCMC, using emcee.
+
+    The priors are uniform within ``[limits1, limits2]``. A parameter whose limits
+    are ``NaN`` is kept fixed at its initial value. Call :meth:`run_mcmc` to fit; the
+    results are then in the ``results`` attribute.
+
+    Parameters
+    ----------
+    input_data_x : array_like
+        Independent variable, passed to ``model`` unchanged.
+    input_data_y : array_like
+        Data to fit.
+    input_data_y_unc : array_like
+        Uncertainties of ``input_data_y``.
+    model : callable
+        Model function, called as ``model(input_data_x, *parameters)`` with *all*
+        the parameters (fixed and free) in the order of ``initials``.
+    initials : array_like
+        Initial value of every parameter.
+    limits1, limits2 : array_like
+        Lower and upper prior limits of every parameter. Use ``numpy.nan`` for both to
+        keep a parameter fixed.
+    walkers : int
+        Number of MCMC walkers.
+    iterations : int
+        Total number of MCMC samples, summed over all walkers. Each walker makes
+        ``iterations // walkers`` steps.
+    burn_in : int
+        Number of samples, summed over all walkers, discarded from the start of the
+        chain.
+    data_x_name, data_y_name : str, optional
+        Keys under which the data are stored in ``results['input_series']``. Default
+        is ``'x'`` and ``'y'``.
+    data_x_print_name, data_y_print_name : str, optional
+        Axis labels for the plots. Default is ``'x'`` and ``'y'``.
+    parameters_names : list of str, optional
+        Parameter names, used as keys in ``results['parameters']``. Default is
+        ``'p0'``, ``'p1'``, and so on.
+    parameters_print_names : list of str, optional
+        Parameter labels for the plots (LaTeX allowed, without the dollar signs).
+        Default is ``'p0'``, ``'p1'``, and so on.
+    counter : str, optional
+        Label of the progress counter. Default is ``'MCMC'``.
+    strech_prior : float, optional
+        The walkers start close to the initial values, within
+        ``1 / strech_prior`` of the distance to each limit. Default is 1000.0.
+    function_to_call : callable, optional
+        Function called without arguments before every evaluation of the posterior,
+        for example to update a progress display.
+
+    Attributes
+    ----------
+    results : dict
+        The results, filled by :meth:`run_mcmc`. See the Notes.
+
+    Notes
+    -----
+    After :meth:`run_mcmc`, ``results`` contains:
+
+    - ``'mcmc'``: the ``iterations``, ``walkers`` and ``burn_in`` used.
+    - ``'input_series'``: the input data.
+    - ``'parameters'``: a dict per parameter, with its ``value``, the lower and upper
+      uncertainties ``m_error`` and ``p_error``, the same values rounded as strings
+      (``print_value``, ``print_m_error``, ``print_p_error``), the ``trace`` of the
+      samples, its histogram (``trace_bins``, ``trace_counts``), the ``initial``
+      value and the prior limits (``min_allowed``, ``max_allowed``). For fixed
+      parameters only ``value`` is set.
+    - ``'parameters_final'``: the list of final values of all the parameters.
+    - ``'output_series'``: the best-fit ``model`` and the ``residuals``.
+    - ``'statistics'``: residual statistics (``res_mean``, ``res_std``,
+      ``res_rms``, ``res_chi_sqr``, ``res_red_chi_sqr``, ``res_autocorr``,
+      ``res_max_autocorr``) and the correlation matrix of the fitted parameters
+      (``corr_matrix``, ``corr_variables``).
+
+    The value of each parameter is the peak of its posterior histogram, and the
+    uncertainties enclose 68% of the samples on each side of the peak (see
+    :func:`one_d_distribution`). Samples further than five median absolute
+    deviations from the median, in any parameter, are not used.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import pylightcurve as plc
+    >>> x = np.linspace(0, 10, 100)
+    >>> y = 2.0 * x + 1.0 + np.random.normal(0, 0.5, 100)
+    >>> def line(x, slope, intercept):
+    ...     return slope * x + intercept
+    >>> fit = plc.EmceeFitting(x, y, np.full(100, 0.5), line, [1.0, 0.0],
+    ...                        [0.0, -5.0], [5.0, 5.0], 20, 20000, 5000,
+    ...                        parameters_names=['slope', 'intercept'])
+    >>> fit.run_mcmc()
+    >>> fit.results['parameters']['slope']['value']
+
+    """
 
     def __init__(self, input_data_x, input_data_y, input_data_y_unc,
                  model, initials, limits1, limits2, walkers, iterations, burn_in,
@@ -34,11 +128,9 @@ class EmceeFitting:
 
         self.model = model
 
-        self.initials = np.array(initials)
-
-        self.limits1 = np.array(limits1)
-
-        self.limits2 = np.array(limits2)
+        self.initials = np.array(initials, dtype=float)
+        self.limits1 = np.array(limits1, dtype=float)
+        self.limits2 = np.array(limits2, dtype=float)
 
         self.walkers = int(walkers)
 
@@ -78,6 +170,7 @@ class EmceeFitting:
         self.function_to_call = function_to_call
 
     def run_mcmc(self):
+        """Run the MCMC and fill the ``results`` attribute."""
 
         fitted_parameters_indices = np.where(~np.isnan(self.limits1 * self.limits2))[0]
 
@@ -148,9 +241,7 @@ class EmceeFitting:
 
             if not np.isnan(self.limits1[var]):
 
-                trace = mcmc_results[:, np.where(fitted_parameters_indices == var)[0][0]]
-                trace = trace.reshape(int(self.walkers), int(self.iterations) // int(self.walkers))
-                trace = (np.swapaxes(trace, 0, 1).flatten())[self.burn_in:]
+                trace = mcmc_results[:, np.where(fitted_parameters_indices == var)[0][0]][self.burn_in:]
 
                 median = np.median(trace)
                 mad = np.sqrt(np.median((trace - median) ** 2))
@@ -172,9 +263,7 @@ class EmceeFitting:
                             'print_value': self.initials[var], 'print_m_error': '-', 'print_p_error': '-'}
 
             else:
-                trace = mcmc_results[:, np.where(fitted_parameters_indices == var)[0][0]]
-                trace = trace.reshape(int(self.walkers), int(self.iterations) // int(self.walkers))
-                trace = (np.swapaxes(trace, 0, 1).flatten())[self.burn_in:]
+                trace = mcmc_results[:, np.where(fitted_parameters_indices == var)[0][0]][self.burn_in:]
 
                 trace = trace[trace_to_analyse]
 
@@ -222,6 +311,19 @@ class EmceeFitting:
         self.mcmc_run_complete = True
 
     def save_all(self, export_file):
+        """Save the ``results`` dictionary to a pickle file.
+
+        Parameters
+        ----------
+        export_file : str
+            Path of the pickle file. Open it with :func:`open_dict`.
+
+        Raises
+        ------
+        PyLCProcessError
+            If :meth:`run_mcmc` has not been run.
+
+        """
 
         if not self.mcmc_run_complete:
             raise PyLCProcessError('MCMC not completed')
@@ -229,6 +331,19 @@ class EmceeFitting:
         save_dict(self.results, export_file)
 
     def save_results(self, export_file):
+        """Save the fitted values and the residual statistics to a text file.
+
+        Parameters
+        ----------
+        export_file : str
+            Path of the text file.
+
+        Raises
+        ------
+        PyLCProcessError
+            If :meth:`run_mcmc` has not been run.
+
+        """
 
         if not self.mcmc_run_complete:
             raise PyLCProcessError('MCMC not completed')
@@ -254,14 +369,39 @@ class EmceeFitting:
         w.close()
 
     def plot_fitting(self, export_file):
+        """Plot the data, the best-fit model and the residuals.
+
+        Parameters
+        ----------
+        export_file : str
+            Path of the image file. The format is set by the extension, for example
+            ``.pdf`` or ``.png``.
+
+        """
 
         plot_mcmc_fitting(self, export_file)
 
     def plot_corner(self, export_file):
+        """Plot the posterior distributions and the correlations of the fitted parameters.
+
+        Parameters
+        ----------
+        export_file : str
+            Path of the image file.
+
+        """
 
         plot_mcmc_corner(self, export_file)
 
     def plot_traces(self, export_file):
+        """Plot the MCMC traces of the fitted parameters.
+
+        Parameters
+        ----------
+        export_file : str
+            Path of the image file.
+
+        """
 
         plot_mcmc_traces(self, export_file)
 
@@ -270,6 +410,30 @@ class EmceeFitting:
 
 
 def values_to_print(value, error_minus, error_plus):
+    """Round a value and its uncertainties for printing.
+
+    The number of decimal places keeps two significant digits of the smaller
+    uncertainty, with at least two decimal places.
+
+    Parameters
+    ----------
+    value : float
+        The value.
+    error_minus, error_plus : float
+        The lower and upper uncertainties.
+
+    Returns
+    -------
+    tuple of str
+        The rounded value, lower uncertainty and upper uncertainty.
+
+    Examples
+    --------
+    >>> import pylightcurve as plc
+    >>> plc.values_to_print(0.123456, 0.0012, 0.0034)
+    ('0.1235', '0.0012', '0.0034')
+
+    """
 
     value = float(value)
     error_minus = float(error_minus)

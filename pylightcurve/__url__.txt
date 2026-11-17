@@ -1,1 +1,1 @@
-https://github.com/ucl-exoplanets/pylightcurve
+https://github.com/atsiaras/pylightcurve-4
